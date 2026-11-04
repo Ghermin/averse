@@ -200,7 +200,7 @@ class TorrentEngine(private val context: Context) {
         val down = s.downloadPayloadRate()
         return JSONObject()
             .put("id", id(h))
-            .put("name", s.name().ifEmpty { "Lien magnet" })
+            .put("name", s.name().ifEmpty { h.torrentFile()?.name().orEmpty() }.ifEmpty { "Lien magnet" })
             .put("state", state)
             .put("progress", if (s.hasMetadata()) s.progress().toDouble() else 0.0)
             .put("size", size)

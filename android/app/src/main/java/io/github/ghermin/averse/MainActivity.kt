@@ -20,6 +20,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -48,10 +49,14 @@ class MainActivity : Activity() {
             isAppearanceLightNavigationBars = !night
         }
 
+        // La WebView ignore son propre padding : les marges des barres système vont sur un conteneur.
         web = WebView(this)
         web.setBackgroundColor(bg)
-        setContentView(web)
-        ViewCompat.setOnApplyWindowInsetsListener(web) { v, insets ->
+        val root = FrameLayout(this)
+        root.setBackgroundColor(bg)
+        root.addView(web, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        setContentView(root)
+        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
             val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
             v.setPadding(bars.left, bars.top, bars.right, maxOf(bars.bottom, ime.bottom))
@@ -217,6 +222,21 @@ class MainActivity : Activity() {
     // ---------- Ouvrir un téléchargement ----------
 
     private fun openDownloads() {
+        // D'abord le dossier Download/Averse lui-même dans l'appli Fichiers, sinon la vue Téléchargements.
+        val root = android.os.Environment.getExternalStorageDirectory().absolutePath
+        val dir = engine.downloadDir.absolutePath
+        if (dir.startsWith("$root/")) {
+            val docId = "primary:" + dir.removePrefix("$root/")
+            val uri = android.provider.DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", docId)
+            try {
+                startActivity(
+                    Intent(Intent.ACTION_VIEW).setDataAndType(uri, android.provider.DocumentsContract.Document.MIME_TYPE_DIR)
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+                return
+            } catch (_: Exception) {
+            }
+        }
         try {
             startActivity(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (_: ActivityNotFoundException) {
