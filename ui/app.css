@@ -97,6 +97,52 @@ main.wrap { flex: 1; padding: 20px 0 32px; }
 @keyframes in { from { opacity: 0; transform: translateY(6px); } }
 
 .item__head { display: flex; align-items: flex-start; gap: 12px; }
+.item { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.item__check {
+  flex: none;
+  display: none;
+  width: 18px;
+  height: 18px;
+  margin: 3px 0 0;
+  accent-color: var(--pg-accent);
+  cursor: pointer;
+}
+/* Écran tactile : les cases n'apparaissent qu'après un appui long. Souris : toujours là, discrètes. */
+.selecting .item__check { display: block; }
+.selecting .item { cursor: pointer; }
+@media (hover: hover) and (pointer: fine) {
+  .item__check { display: block; opacity: .35; transition: opacity .15s; }
+  .item:hover .item__check, .item__check:checked, .item__check:focus-visible, .selecting .item__check { opacity: 1; }
+}
+.item.is-selected {
+  border-color: color-mix(in srgb, var(--pg-accent) 60%, var(--pg-line));
+  background: color-mix(in srgb, var(--pg-accent) 6%, var(--pg-surface));
+}
+
+/* Actions groupées : visibles dès qu'un torrent est coché */
+
+.bulk {
+  position: sticky;
+  top: calc(60px + env(safe-area-inset-top));
+  z-index: 5;
+  margin-top: 18px;
+  padding: 10px 10px 10px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  border: 1px solid color-mix(in srgb, var(--pg-accent) 45%, var(--pg-line));
+  border-radius: var(--pg-radius);
+  background: var(--pg-surface);
+  box-shadow: var(--pg-shadow);
+  animation: in .2s ease;
+}
+.bulk[hidden] { display: none; }
+.bulk__count { font-weight: 600; }
+.bulk .link { font-size: 14.5px; }
+.bulk__actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.bulk__actions .pg-btn { padding: 7px 13px; font-size: 14.5px; }
+.bulk + .list { margin-top: 10px; }
 .item__name {
   flex: 1;
   min-width: 0;
@@ -254,9 +300,12 @@ main.wrap { flex: 1; padding: 20px 0 32px; }
   .add__hint { display: none; }
   .add__alt .pg-btn { width: 100%; }
   .item { padding: 14px 14px 12px; }
+  .bulk { padding: 10px 8px 10px 14px; }
+  .bulk__actions { margin-left: 0; width: 100%; }
+  .bulk__actions .pg-btn { flex: 1; padding-inline: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .item, .toast { animation: none; }
+  .item, .toast, .bulk { animation: none; }
   .bar-fill { transition: none; }
 }

@@ -117,6 +117,9 @@ function render(state) {
   for (const [id, li] of rows) {
     if (!seen.has(id)) { li.remove(); rows.delete(id); }
   }
+  let pruned = false;
+  for (const id of selected) if (!seen.has(id)) { selected.delete(id); pruned = true; }
+  if (pruned) renderSelection();
   $("empty").hidden = state.torrents.length > 0;
   $("total-down").textContent = rate(down);
   $("total-up").textContent = rate(up);
@@ -157,8 +160,12 @@ function update(li, t) {
   let st = t.state;
   if (st === "downloading" && !(t.down > 0) && t.peers === 0) st = "stalled";
   li.dataset.state = t.state;
-  li.querySelector(".item__name").textContent = t.name;
-  li.querySelector(".item__name").title = t.name;
+  if (li.dataset.name !== t.name) {
+    li.dataset.name = t.name;
+    li.querySelector(".item__name").textContent = t.name;
+    li.querySelector(".item__name").title = t.name;
+    li.querySelector(".item__check").setAttribute("aria-label", "Sélectionner " + t.name);
+  }
   li.querySelector(".bar-fill").style.width = (Math.max(0, Math.min(1, t.progress)) * 100).toFixed(1) + "%";
 
   const pct = Math.floor(t.progress * 1000) / 10;
@@ -266,8 +273,12 @@ document.addEventListener("paste", (e) => {
 });
 
 list.addEventListener("click", async (e) => {
+  if (e.target.classList.contains("item__check")) return; // géré par « change »
   const btn = e.target.closest("button[data-act]");
-  if (!btn) return;
+  if (!btn) {
+    onItemClick(e);
+    return;
+  }
   const li = btn.closest(".item");
   const id = li.dataset.id;
   const act = btn.dataset.act;
@@ -276,16 +287,144 @@ list.addEventListener("click", async (e) => {
   } else if (act === "open") {
     run("open", { id });
   } else if (act === "remove") {
-    const dlg = $("confirm");
-    $("confirm-name").textContent = li.querySelector(".item__name").textContent;
-    $("confirm-files").checked = false;
-    dlg.returnValue = "";
-    dlg.showModal();
-    dlg.addEventListener("close", () => {
-      if (dlg.returnValue === "ok") run("remove", { id, deleteFiles: $("confirm-files").checked });
-    }, { once: true });
+    confirmRemove([li.dataset.name || ""], (deleteFiles) => run("remove", { id, deleteFiles }));
   }
 });
+
+function confirmRemove(names, onOk) {
+  const dlg = $("confirm");
+  $("confirm-title").textContent = names.length > 1 ? "Retirer ces " + names.length + " torrents ?" : "Retirer ce torrent ?";
+  $("confirm-name").textContent = names.length > 3
+    ? names.slice(0, 3).join(" · ") + " et " + (names.length - 3) + " autre" + (names.length > 4 ? "s" : "")
+    : names.join(" · ");
+  $("confirm-files").checked = false;
+  dlg.returnValue = "";
+  dlg.showModal();
+  dlg.addEventListener("close", () => {
+    if (dlg.returnValue === "ok") onOk($("confirm-files").checked);
+  }, { once: true });
+}
+
+// ---------- Sélection multiple ----------
+// Souris : la petite case, Ctrl+clic, Maj+clic (plage). Tactile : appui long sur un torrent,
+// puis un simple appui coche / décoche les autres. Échap ou × pour sortir.
+
+const selected = new Set();
+let anchor = null;
+
+function renderSelection() {
+  for (const [id, li] of rows) {
+    const on = selected.has(id);
+    li.classList.toggle("is-selected", on);
+    li.querySelector(".item__check").checked = on;
+  }
+  const n = selected.size;
+  document.body.classList.toggle("selecting", n > 0);
+  $("bulk").hidden = n === 0;
+  $("bulk-count").textContent = n + (n > 1 ? " sélectionnés" : " sélectionné");
+  $("bulk-all").textContent = n === rows.size ? "Tout désélectionner" : "Tout sélectionner";
+}
+
+function toggleSelect(id, on = !selected.has(id)) {
+  if (on) selected.add(id); else selected.delete(id);
+  anchor = id;
+  renderSelection();
+}
+
+function clearSelection() {
+  selected.clear();
+  anchor = null;
+  renderSelection();
+}
+
+/** Les id dans l'ordre affiché (le plus récent en haut). */
+const visibleIds = () => Array.from(list.children, (li) => li.dataset.id);
+
+function onItemClick(e) {
+  const li = e.target.closest(".item");
+  if (!li) return;
+  if (suppressClick) { suppressClick = false; return; }
+  const id = li.dataset.id;
+  if (e.shiftKey && anchor && rows.has(anchor)) {
+    const ids = visibleIds();
+    const [a, b] = [ids.indexOf(anchor), ids.indexOf(id)].sort((x, y) => x - y);
+    for (const x of ids.slice(a, b + 1)) selected.add(x);
+    renderSelection();
+  } else if (e.ctrlKey || e.metaKey || selected.size > 0) {
+    toggleSelect(id);
+  }
+}
+
+list.addEventListener("change", (e) => {
+  if (!e.target.classList.contains("item__check")) return;
+  toggleSelect(e.target.closest(".item").dataset.id, e.target.checked);
+});
+
+// Appui long (tactile, ou souris maintenue) : entre en sélection.
+let pressTimer = 0, pressStart = null, suppressClick = false;
+list.addEventListener("pointerdown", (e) => {
+  suppressClick = false;
+  if (e.button !== 0 || e.target.closest("button, input")) return;
+  const li = e.target.closest(".item");
+  if (!li) return;
+  pressStart = { x: e.clientX, y: e.clientY };
+  clearTimeout(pressTimer);
+  pressTimer = setTimeout(() => {
+    pressStart = null;
+    suppressClick = true;
+    toggleSelect(li.dataset.id, true);
+    if (navigator.vibrate) navigator.vibrate(15);
+  }, 450);
+});
+const cancelPress = () => { clearTimeout(pressTimer); pressStart = null; };
+list.addEventListener("pointermove", (e) => {
+  if (pressStart && Math.hypot(e.clientX - pressStart.x, e.clientY - pressStart.y) > 10) cancelPress();
+});
+for (const ev of ["pointerup", "pointercancel", "pointerleave"]) list.addEventListener(ev, cancelPress);
+// Pas de menu contextuel du système sur un appui long.
+list.addEventListener("contextmenu", (e) => { if (e.target.closest(".item")) e.preventDefault(); });
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && selected.size && !document.querySelector("dialog[open]")) clearSelection();
+});
+
+$("bulk-all").addEventListener("click", () => {
+  if (selected.size === rows.size) clearSelection();
+  else { for (const id of rows.keys()) selected.add(id); renderSelection(); }
+});
+
+$("bulk").addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-bulk]");
+  if (!btn) return;
+  const act = btn.dataset.bulk;
+  if (act === "clear") { clearSelection(); return; }
+  const ids = visibleIds().filter((id) => selected.has(id));
+  const lis = ids.map((id) => rows.get(id));
+  if (act === "remove") {
+    confirmRemove(lis.map((li) => li.dataset.name || ""), async (deleteFiles) => {
+      await runMany(ids, (id) => host.call("remove", { id, deleteFiles }),
+        ids.length > 1 ? ids.length + " torrents retirés." : "Torrent retiré.");
+      clearSelection();
+    });
+    return;
+  }
+  // Pause : ceux qui tournent. Reprendre : ceux en pause ou en erreur.
+  const paused = (li) => li.dataset.state === "paused" || li.dataset.state === "error";
+  const todo = ids.filter((id, i) => (act === "pause") !== paused(lis[i]));
+  if (!todo.length) { toast(act === "pause" ? "Déjà en pause." : "Rien à reprendre."); return; }
+  await runMany(todo, (id) => host.call(act, { id }));
+});
+
+/** Lance une commande sur plusieurs torrents ; un seul message à la fin. */
+async function runMany(ids, fn, okMessage) {
+  let failed = 0, lastError = "";
+  for (const id of ids) {
+    try { await fn(id); } catch (err) { failed++; lastError = err.message || String(err); }
+  }
+  if (failed) toast(failed === ids.length ? lastError : failed + " sur " + ids.length + " n'ont pas pu être traités : " + lastError, true);
+  else if (okMessage) toast(okMessage);
+  refresh();
+}
 
 // Glisser-déposer de fichiers .torrent (PC surtout).
 let dragDepth = 0;

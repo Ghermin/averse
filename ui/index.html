@@ -38,6 +38,18 @@
     </section>
 
     <section aria-label="Téléchargements">
+      <div id="bulk" class="bulk" role="toolbar" aria-label="Actions sur la sélection" hidden>
+        <span class="bulk__count" id="bulk-count" aria-live="polite"></span>
+        <button id="bulk-all" class="link" type="button">Tout sélectionner</button>
+        <span class="bulk__actions">
+          <button class="pg-btn" data-bulk="pause" type="button">Pause</button>
+          <button class="pg-btn" data-bulk="resume" type="button">Reprendre</button>
+          <button class="pg-btn pg-btn--danger" data-bulk="remove" type="button">Retirer</button>
+          <button class="icon-btn" data-bulk="clear" type="button" title="Annuler la sélection" aria-label="Annuler la sélection">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4"/></svg>
+          </button>
+        </span>
+      </div>
       <ul id="list" class="list" role="list"></ul>
       <div id="empty" class="empty" hidden>
         <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M20 10.5l-3.5 8M31 9l-3.5 8M42 10.5l-3.5 8" stroke="currentColor" stroke-opacity=".45" stroke-width="3" stroke-linecap="round"/><path d="M32 26v19M23.5 37l8.5 8.5 8.5-8.5" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 53h26" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>
@@ -60,7 +72,7 @@
 
   <dialog id="confirm" class="dlg">
     <form method="dialog">
-      <h2>Retirer ce torrent ?</h2>
+      <h2 id="confirm-title">Retirer ce torrent ?</h2>
       <p id="confirm-name" class="dlg__name"></p>
       <label class="check"><input id="confirm-files" type="checkbox"> Supprimer aussi les fichiers téléchargés</label>
       <div class="dlg__actions">
@@ -87,6 +99,7 @@
   <template id="item">
     <li class="item">
       <div class="item__head">
+        <input class="item__check" type="checkbox" aria-label="Sélectionner">
         <p class="item__name"></p>
         <div class="item__actions">
           <button class="icon-btn" data-act="toggle" type="button"></button>
