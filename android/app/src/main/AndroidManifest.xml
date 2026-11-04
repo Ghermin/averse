@@ -17,7 +17,7 @@
         android:name=".AverseApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="Averse"
         android:requestLegacyExternalStorage="true"
         android:supportsRtl="false"
