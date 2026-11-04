@@ -120,7 +120,38 @@ function render(state) {
   $("empty").hidden = state.torrents.length > 0;
   $("total-down").textContent = rate(down);
   $("total-up").textContent = rate(up);
+  askNext(state.pending || []);
 }
+
+// Un torrent venu d'une autre appli (navigateur, double-clic…) attend un oui avant de démarrer.
+let asking = null;
+const answered = new Set();
+
+function askNext(pending) {
+  const keys = new Set(pending.map((p) => p.key));
+  for (const k of answered) if (!keys.has(k)) answered.delete(k);
+  const dlg = $("ask");
+  if (asking) {
+    if (!keys.has(asking)) { asking = null; dlg.close("gone"); }
+    return;
+  }
+  const p = pending.find((x) => !answered.has(x.key));
+  if (!p || $("confirm").open) return;
+  asking = p.key;
+  $("ask-name").textContent = p.size > 0 ? p.name + " · " + size(p.size) : p.name;
+  dlg.returnValue = "";
+  dlg.showModal();
+}
+
+$("ask").addEventListener("close", () => {
+  const key = asking;
+  asking = null;
+  const v = $("ask").returnValue;
+  if (!key || v === "gone") return;
+  answered.add(key);
+  if (v === "ok") run("acceptPending", { key }, "Torrent ajouté.");
+  else run("rejectPending", { key });
+});
 
 function update(li, t) {
   let st = t.state;
@@ -315,6 +346,7 @@ function demoHost() {
   const cmds = {
     state: () => ({
       torrents: torrents.map(view),
+      pending: [],
       downloadDir: phone ? "Stockage interne/Download/Averse" : "C:\\Users\\toi\\Downloads",
       canChangeDir: !phone,
     }),

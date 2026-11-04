@@ -1,8 +1,10 @@
 using System.Diagnostics;
 using System.Net;
+using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 using MonoTorrent;
 using MonoTorrent.Client;
+using MonoTorrent.PieceWriter;
 
 namespace Averse;
 
@@ -16,6 +18,14 @@ public sealed class Engine
     private string StateFile => Path.Combine(Settings.CacheDir, "engine.state");
 
     public Engine(Settings settings) => this.settings = settings;
+
+    /// <summary>Un torrent a été refusé (message à montrer). Peut venir de n'importe quel fil.</summary>
+    public event Action<string>? Warning;
+
+    /// <summary>Les torrents venus d'ailleurs (navigateur, double-clic…) qui attendent l'accord de l'utilisateur.</summary>
+    private readonly List<Pending> pending = [];
+
+    private sealed record Pending(string Key, string Name, long Size, string? Link, byte[]? Bytes);
 
     public async Task StartAsync()
     {
@@ -36,11 +46,12 @@ public sealed class Engine
             DhtEndPoint = new IPEndPoint(IPAddress.Any, settings.Port),
         };
 
+        var factories = Factories.Default.WithPieceWriterCreator(max => new SafeWriter(new DiskWriter(max), IsAllowed));
         if (File.Exists(StateFile))
         {
             try
             {
-                engine = await ClientEngine.RestoreStateAsync(StateFile);
+                engine = await ClientEngine.RestoreStateAsync(StateFile, factories);
                 await engine.UpdateSettingsAsync(builder.ToSettings());
             }
             catch (Exception ex)
@@ -49,12 +60,96 @@ public sealed class Engine
                 engine = null!;
             }
         }
-        engine ??= new ClientEngine(builder.ToSettings());
+        engine ??= new ClientEngine(builder.ToSettings(), factories);
 
-        foreach (var m in engine.Torrents)
+        foreach (var m in engine.Torrents.ToList())
         {
+            if (!await AcceptAsync(m)) continue;
             if (!settings.Paused.Contains(Id(m))) await m.StartAsync();
         }
+    }
+
+    // ---------- Protection des chemins ----------
+
+    private readonly ConditionalWeakTable<ITorrentManagerFile, Tuple<string, bool>> verdicts = new();
+
+    /// <summary>Le fichier reste-t-il dans le dossier de son torrent ? (appelé par <see cref="SafeWriter"/>)</summary>
+    private bool IsAllowed(ITorrentManagerFile file)
+    {
+        if (verdicts.TryGetValue(file, out var v) && v.Item1 == file.FullPath) return v.Item2;
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            try
+            {
+                var owner = engine?.Torrents.FirstOrDefault(m => m.Files.Any(f => ReferenceEquals(f, file)));
+                var ok = owner != null && SafeWriter.IsInside(file.FullPath, owner.SavePath);
+                verdicts.AddOrUpdate(file, Tuple.Create(file.FullPath, ok));
+                return ok;
+            }
+            catch (InvalidOperationException)
+            {
+                // Liste des torrents modifiée pendant la recherche : on recommence.
+            }
+        }
+        return false;
+    }
+
+    private static bool IsSafe(TorrentManager m) =>
+        m.Torrent == null || m.Files.All(f => SafeWriter.IsInside(f.FullPath, m.SavePath));
+
+    /// <summary>
+    /// Surveille un torrent : si ses fichiers sortent de son dossier (tout de suite, ou une fois reçues les
+    /// infos d'un lien magnet), il est retiré. Renvoie false s'il vient d'être retiré.
+    /// </summary>
+    private async Task<bool> AcceptAsync(TorrentManager m)
+    {
+        if (!IsSafe(m))
+        {
+            await RejectAsync(m);
+            return false;
+        }
+        if (m.Torrent == null)
+        {
+            var checkedOnce = 0;
+            void OnState(object? sender, TorrentStateChangedEventArgs e)
+            {
+                if (m.Torrent == null || Interlocked.Exchange(ref checkedOnce, 1) == 1) return;
+                m.TorrentStateChanged -= OnState;
+                if (!IsSafe(m)) _ = Task.Run(() => RejectAsync(m));
+            }
+            m.TorrentStateChanged += OnState;
+        }
+        return true;
+    }
+
+    private async Task RejectAsync(TorrentManager m)
+    {
+        var name = m.Torrent?.Name ?? m.MagnetLink?.Name ?? "Ce torrent";
+        // Juste après la réception des infos d'un magnet, MonoTorrent s'arrête puis redémarre tout seul :
+        // l'arrêt peut échouer pendant cette bascule, on réessaie. (SafeWriter bloque les écritures en attendant.)
+        for (var attempt = 0; attempt < 40; attempt++)
+        {
+            try
+            {
+                if (!engine.Torrents.Contains(m)) break;
+                if (m.State == TorrentState.Stopping)
+                {
+                    await Task.Delay(250);
+                    continue;
+                }
+                if (m.State != TorrentState.Stopped) await m.StopAsync(TimeSpan.FromSeconds(3));
+                await engine.RemoveAsync(m, RemoveMode.CacheDataOnly);
+                break;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Reject failed: " + ex.Message);
+                await Task.Delay(250);
+            }
+        }
+        settings.Paused.Remove(Id(m));
+        await SaveAsync();
+        Warning?.Invoke($"« {name} » a été refusé : il voulait écrire en dehors du dossier de téléchargement.");
     }
 
     /// <summary>
@@ -156,6 +251,14 @@ public sealed class Engine
         switch (cmd)
         {
             case "state": return State();
+            case "acceptPending":
+            {
+                var p = TakePending((string?)args["key"]);
+                if (p.Bytes != null) await AddTorrentBytesAsync(p.Bytes);
+                else await AddLinkAsync(p.Link!);
+                return null;
+            }
+            case "rejectPending": TakePending((string?)args["key"]); return null;
             case "addMagnet": await AddLinkAsync((string?)args["uri"] ?? ""); return null;
             case "addTorrentFile":
                 await AddTorrentBytesAsync(Convert.FromBase64String((string?)args["data"] ?? ""));
@@ -202,9 +305,16 @@ public sealed class Engine
     {
         var list = new JsonArray();
         foreach (var m in engine.Torrents) list.Add(Describe(m));
+        var asks = new JsonArray();
+        lock (pending)
+        {
+            foreach (var p in pending)
+                asks.Add(new JsonObject { ["key"] = p.Key, ["name"] = p.Name, ["size"] = p.Size });
+        }
         return new JsonObject
         {
             ["torrents"] = list,
+            ["pending"] = asks,
             ["downloadDir"] = settings.DownloadDir,
             ["canChangeDir"] = true,
         };
@@ -251,6 +361,69 @@ public sealed class Engine
         _ => error.Exception?.Message ?? "inconnue",
     };
 
+    // ---------- Torrents venus d'ailleurs : rien ne démarre sans l'accord de l'utilisateur ----------
+
+    /// <summary>
+    /// Un lien magnet ou un .torrent ouvert depuis Windows (navigateur, double-clic…) : vérifié puis mis en
+    /// attente. L'interface demande « Ajouter ce torrent ? » et seul un oui le lance.
+    /// </summary>
+    public async Task QueueExternalAsync(string link)
+    {
+        link = link.Trim();
+        Pending p;
+        if (File.Exists(link))
+        {
+            byte[] bytes;
+            try
+            {
+                bytes = await File.ReadAllBytesAsync(link);
+            }
+            catch
+            {
+                throw new UserError("Impossible de lire " + Path.GetFileName(link) + ".");
+            }
+            if (!Torrent.TryLoad(bytes, out var torrent) || torrent == null)
+                throw new UserError("Ce fichier n'est pas un .torrent valide.");
+            EnsureNew(torrent.InfoHashes);
+            p = new Pending(torrent.InfoHashes.V1OrV2.ToHex().ToLowerInvariant(), torrent.Name, torrent.Size, null, bytes);
+        }
+        else
+        {
+            if (System.Text.RegularExpressions.Regex.IsMatch(link, "^[0-9a-fA-F]{40}$"))
+                link = "magnet:?xt=urn:btih:" + link;
+            if (link.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                link.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                p = new Pending("url:" + link, link, 0, link, null);
+            }
+            else
+            {
+                if (!MagnetLink.TryParse(link, out var magnet) || magnet == null)
+                    throw new UserError("Ce lien magnet n'est pas valide.");
+                EnsureNew(magnet.InfoHashes);
+                var hash = magnet.InfoHashes.V1OrV2.ToHex().ToLowerInvariant();
+                var name = string.IsNullOrWhiteSpace(magnet.Name) ? "Lien magnet " + hash[..8] : magnet.Name;
+                p = new Pending(hash, name, 0, link, null);
+            }
+        }
+        lock (pending)
+        {
+            if (pending.Any(x => x.Key == p.Key)) return;
+            if (pending.Count >= 20) throw new UserError("Trop de torrents en attente : réponds d'abord aux demandes affichées.");
+            pending.Add(p);
+        }
+    }
+
+    private Pending TakePending(string? key)
+    {
+        lock (pending)
+        {
+            var p = pending.FirstOrDefault(x => x.Key == key) ?? throw new UserError("Cette demande n'est plus d'actualité.");
+            pending.Remove(p);
+            return p;
+        }
+    }
+
     // ---------- Ajout ----------
 
     /// <summary>Lien magnet, empreinte seule ou adresse http(s) d'un .torrent.</summary>
@@ -280,6 +453,7 @@ public sealed class Engine
             throw new UserError("Ce lien magnet n'est pas valide.");
         EnsureNew(magnet.InfoHashes);
         var m = await engine.AddAsync(magnet, settings.DownloadDir);
+        if (!await AcceptAsync(m)) return;
         await m.StartAsync();
         await SaveAsync();
     }
@@ -304,6 +478,7 @@ public sealed class Engine
             throw new UserError("Ce fichier n'est pas un .torrent valide.");
         EnsureNew(torrent.InfoHashes);
         var m = await engine.AddAsync(torrent, settings.DownloadDir);
+        if (!await AcceptAsync(m)) return;
         await m.StartAsync();
         await SaveAsync();
     }

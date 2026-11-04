@@ -38,6 +38,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         engine = (application as AverseApp).engine
+        engine.onWarning = { toast(it, error = true) }
         TorrentService.createChannel(this)
 
         val night = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
@@ -114,6 +115,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        engine.onWarning = null
         web.destroy()
         super.onDestroy()
     }
@@ -145,13 +147,15 @@ class MainActivity : Activity() {
         }
     }
 
+    /**
+     * Lien venu d'une autre appli (navigateur, partage…). Il ne démarre pas tout seul : l'interface demande
+     * d'abord « Ajouter ce torrent ? », pour qu'une page web ne puisse rien lancer.
+     */
     private fun addExternal(link: String) {
-        ensurePermissions()
         engine.handler.post {
             try {
-                engine.addLink(link)
-                toast("Torrent ajouté.")
-                startService()
+                engine.queueLink(link)
+                send(JSONObject().put("event", "changed"))
             } catch (e: UserError) {
                 toast(e.message ?: "Erreur", error = true)
             } catch (e: Exception) {
@@ -160,8 +164,9 @@ class MainActivity : Activity() {
         }
     }
 
+    /** Un .torrent : choisi dans Averse (replyId ≠ 0, ajouté tout de suite) ou ouvert depuis une autre appli (mis en attente). */
     private fun addFromUri(uri: Uri, replyId: Int) {
-        ensurePermissions()
+        if (replyId != 0) ensurePermissions()
         val bytes = try {
             contentResolver.openInputStream(uri)?.use { it.readBytes() }
         } catch (e: Exception) {
@@ -170,9 +175,14 @@ class MainActivity : Activity() {
         engine.handler.post {
             try {
                 if (bytes == null) throw UserError("Impossible de lire ce fichier.")
-                engine.addTorrentBytes(bytes)
-                startService()
-                if (replyId != 0) reply(replyId, null) else toast("Torrent ajouté.")
+                if (replyId != 0) {
+                    engine.addTorrentBytes(bytes)
+                    startService()
+                    reply(replyId, null)
+                } else {
+                    engine.queueTorrentBytes(bytes)
+                    send(JSONObject().put("event", "changed"))
+                }
             } catch (e: Exception) {
                 val msg = (e as? UserError)?.message ?: "Erreur : ${e.message}"
                 if (replyId != 0) replyError(replyId, msg) else toast(msg, error = true)
@@ -294,6 +304,13 @@ class MainActivity : Activity() {
                 try {
                     val result: Any? = when (cmd) {
                         "state" -> engine.state()
+                        "acceptPending" -> {
+                            ensurePermissions()
+                            engine.acceptPending(args.optString("key"))
+                            startService()
+                            null
+                        }
+                        "rejectPending" -> engine.rejectPending(args.optString("key")).let { null }
                         "addMagnet" -> {
                             ensurePermissions()
                             engine.addLink(args.optString("uri"))

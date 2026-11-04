@@ -47,6 +47,13 @@ class TorrentEngine(private val context: Context) {
     /** Prévenu (sur le fil du moteur) quand quelque chose change : le service met à jour sa notification. */
     var onChange: (() -> Unit)? = null
 
+    /** Un torrent a été refusé : message à montrer (appelé sur le fil du moteur). */
+    var onWarning: ((String) -> Unit)? = null
+
+    /** Torrents venus d'autres applis, en attente d'un oui de l'utilisateur (fil du moteur uniquement). */
+    private class Pending(val key: String, val name: String, val size: Long, val link: String?, val bytes: ByteArray?)
+    private val pending = mutableListOf<Pending>()
+
     val downloadDir: File by lazy { chooseDownloadDir() }
 
     fun start() = handler.post {
@@ -147,11 +154,38 @@ class TorrentEngine(private val context: Context) {
             }
             AlertType.ADD_TORRENT, AlertType.METADATA_RECEIVED, AlertType.TORRENT_FINISHED -> {
                 val h = (alert as TorrentAlert<*>).handle()
-                if (h.isValid) h.saveResumeData(TorrentHandle.SAVE_INFO_DICT)
+                if (h.isValid && !isSafe(h)) {
+                    reject(h)
+                } else if (h.isValid) {
+                    h.saveResumeData(TorrentHandle.SAVE_INFO_DICT)
+                }
                 onChange?.invoke()
             }
             else -> onChange?.invoke()
         }
+    }
+
+    /**
+     * Les fichiers restent-ils dans le dossier du torrent ? libtorrent nettoie déjà les chemins (« .. »,
+     * chemins absolus) ; on revérifie quand même, par précaution.
+     */
+    private fun isSafe(h: TorrentHandle): Boolean {
+        val ti = h.torrentFile() ?: return true
+        return try {
+            val root = File(h.savePath()).canonicalPath + File.separator
+            val fs = ti.files()
+            (0 until ti.numFiles()).all { File(h.savePath(), fs.filePath(it)).canonicalPath.startsWith(root) }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun reject(h: TorrentHandle) {
+        val name = h.torrentFile()?.name().orEmpty().ifEmpty { "Ce torrent" }
+        val hash = id(h)
+        session.remove(h)
+        File(resumeDir, "$hash.resume").delete()
+        onWarning?.invoke("« $name » a été refusé : il voulait écrire en dehors du dossier de téléchargement.")
     }
 
     fun saveAll(onlyIfModified: Boolean = false) {
@@ -169,8 +203,11 @@ class TorrentEngine(private val context: Context) {
     fun state(): JSONObject {
         val list = JSONArray()
         for (h in handles()) list.put(describe(h))
+        val asks = JSONArray()
+        for (p in pending) asks.put(JSONObject().put("key", p.key).put("name", p.name).put("size", p.size))
         return JSONObject()
             .put("torrents", list)
+            .put("pending", asks)
             .put("downloadDir", displayPath(downloadDir))
             .put("canChangeDir", false)
     }
@@ -228,6 +265,63 @@ class TorrentEngine(private val context: Context) {
         }
         return d to u
     }
+
+    // ---------- Torrents venus d'autres applis : rien ne démarre sans l'accord de l'utilisateur ----------
+
+    /** Lien (magnet, empreinte, http) venu d'une autre appli : vérifié puis mis en attente. */
+    fun queueLink(raw: String) {
+        var link = raw.trim()
+        if (Regex("^[0-9a-fA-F]{40}$").matches(link)) link = "magnet:?xt=urn:btih:$link"
+        if (link.startsWith("http://", true) || link.startsWith("https://", true)) {
+            queue(Pending("url:$link", link, 0, link, null))
+            return
+        }
+        if (!link.startsWith("magnet:", true)) throw UserError("Ce n'est pas un lien magnet.")
+        val p = try {
+            AddTorrentParams.parseMagnetUri(link)
+        } catch (e: Exception) {
+            throw UserError("Ce lien magnet n'est pas valide.")
+        }
+        val hash = p.infoHashes.best
+        if (hash.isAllZeros) throw UserError("Ce lien magnet n'est pas valide.")
+        ensureNew(hash)
+        val hex = hash.toHex()
+        queue(Pending(hex, p.name.orEmpty().ifBlank { "Lien magnet " + hex.take(8) }, 0, link, null))
+    }
+
+    /** Fichier .torrent venu d'une autre appli : vérifié puis mis en attente. */
+    fun queueTorrentBytes(bytes: ByteArray) {
+        val ti = try {
+            TorrentInfo(bytes)
+        } catch (e: Exception) {
+            throw UserError("Ce fichier n'est pas un .torrent valide.")
+        }
+        ensureNew(ti.infoHash())
+        queue(Pending(ti.infoHash().toHex(), ti.name(), ti.totalSize(), null, bytes))
+    }
+
+    private fun queue(p: Pending) {
+        if (pending.any { it.key == p.key }) return
+        if (pending.size >= 20) throw UserError("Trop de torrents en attente : réponds d'abord aux demandes affichées.")
+        pending += p
+    }
+
+    private fun takePending(key: String?): Pending {
+        val p = pending.firstOrNull { it.key == key } ?: throw UserError("Cette demande n'est plus d'actualité.")
+        pending.remove(p)
+        return p
+    }
+
+    fun acceptPending(key: String?) {
+        val p = takePending(key)
+        if (p.bytes != null) addTorrentBytes(p.bytes) else addLink(p.link!!)
+    }
+
+    fun rejectPending(key: String?) {
+        takePending(key)
+    }
+
+    // ---------- Ajout ----------
 
     /** Lien magnet, empreinte seule ou adresse http(s) d'un .torrent. */
     fun addLink(raw: String) {

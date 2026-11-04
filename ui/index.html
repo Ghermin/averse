@@ -70,6 +70,18 @@
     </form>
   </dialog>
 
+  <dialog id="ask" class="dlg">
+    <form method="dialog">
+      <h2>Ajouter ce torrent ?</h2>
+      <p id="ask-name" class="dlg__name"></p>
+      <p class="dlg__note">Ouvert depuis une autre appli (navigateur, fichier…). Rien ne se télécharge sans ton accord.</p>
+      <div class="dlg__actions">
+        <button class="pg-btn" value="no">Ignorer</button>
+        <button class="pg-btn pg-btn--primary" value="ok">Télécharger</button>
+      </div>
+    </form>
+  </dialog>
+
   <div id="toasts" class="toasts" aria-live="polite"></div>
 
   <template id="item">

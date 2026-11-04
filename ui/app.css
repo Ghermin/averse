@@ -218,6 +218,7 @@ main.wrap { flex: 1; padding: 20px 0 32px; }
 .dlg::backdrop { background: rgba(10, 10, 14, .45); }
 .dlg h2 { margin: 0; font-size: 20px; letter-spacing: -0.02em; }
 .dlg__name { margin: 6px 0 16px; color: var(--pg-muted); overflow-wrap: anywhere; }
+.dlg__note { margin: 0; font-size: 14px; color: var(--pg-muted); }
 .check { display: flex; align-items: center; gap: 10px; font-size: 15px; cursor: pointer; }
 .check input { width: 18px; height: 18px; accent-color: var(--danger); }
 .dlg__actions { margin-top: 22px; display: flex; justify-content: flex-end; gap: 10px; }

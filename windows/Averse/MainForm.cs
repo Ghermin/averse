@@ -31,6 +31,11 @@ public sealed class MainForm : Form
     {
         this.engine = engine;
         this.updated = updated;
+        engine.Warning += message => BeginInvokeSafe(() =>
+        {
+            Toast(message, error: true);
+            Post(new JsonObject { ["event"] = "changed" });
+        });
         foreach (var l in links) pendingLinks.Enqueue(l);
 
         Text = "Averse";
@@ -282,10 +287,22 @@ public sealed class MainForm : Form
         catch { }
     }
 
+    private void BeginInvokeSafe(Action action)
+    {
+        try
+        {
+            if (IsHandleCreated && !closing) BeginInvoke(action);
+        }
+        catch { }
+    }
+
     private void Toast(string message, bool error = false) =>
         Post(new JsonObject { ["event"] = "toast", ["message"] = message, ["error"] = error });
 
-    /// <summary>Un lien magnet ou un .torrent ouvert depuis Windows (double-clic, navigateur…).</summary>
+    /// <summary>
+    /// Un lien magnet ou un .torrent ouvert depuis Windows (double-clic, navigateur…). Il ne démarre pas tout
+    /// seul : l'interface demande d'abord « Ajouter ce torrent ? », pour qu'une page web ne puisse rien lancer.
+    /// </summary>
     public async Task AddExternalAsync(string link)
     {
         if (!engineReady)
@@ -295,9 +312,7 @@ public sealed class MainForm : Form
         }
         try
         {
-            if (File.Exists(link)) await engine.AddTorrentFileAsync(link);
-            else await engine.AddLinkAsync(link);
-            Toast("Torrent ajouté.");
+            await engine.QueueExternalAsync(link);
         }
         catch (UserError ex)
         {
