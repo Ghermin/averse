@@ -53,6 +53,7 @@ public static class Installer
             CreateShortcut();
             RegisterAssociations();
             RegisterUninstall();
+            RefreshIcons();
             var psi = new ProcessStartInfo(InstalledExe) { UseShellExecute = false };
             foreach (var a in args) psi.ArgumentList.Add(a);
             // L'antivirus peut encore analyser l'exe qu'on vient d'écrire : on réessaie un peu.
@@ -89,6 +90,41 @@ public static class Installer
             catch { }
         }
     }
+
+    /// <summary>
+    /// Windows garde l'icône d'un exe en cache : après une mise à jour qui la change, les raccourcis du menu
+    /// Démarrer, du bureau et de la barre des tâches montreraient encore l'ancienne. On demande à l'Explorateur
+    /// de les relire (RegisterAssociations envoie déjà SHCNE_ASSOCCHANGED).
+    /// </summary>
+    private static void RefreshIcons()
+    {
+        try
+        {
+            var paths = new[]
+            {
+                InstalledExe,
+                ShortcutPath,
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Averse.lnk"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    @"Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar\Averse.lnk"),
+            };
+            foreach (var path in paths)
+                if (File.Exists(path)) SHChangeNotifyPath(SHCNE_UPDATEITEM, SHCNF_PATHW | SHCNF_FLUSHNOWAIT, path, IntPtr.Zero);
+            var ie4uinit = Path.Combine(Environment.SystemDirectory, "ie4uinit.exe"); // vide le cache d'icônes
+            if (File.Exists(ie4uinit))
+                Process.Start(new ProcessStartInfo(ie4uinit, "-show") { CreateNoWindow = true, UseShellExecute = false });
+        }
+        catch
+        {
+        }
+    }
+
+    private const int SHCNE_UPDATEITEM = 0x00002000;
+    private const uint SHCNF_PATHW = 0x0005;
+    private const uint SHCNF_FLUSHNOWAIT = 0x3000;
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, EntryPoint = "SHChangeNotify")]
+    private static extern void SHChangeNotifyPath(int eventId, uint flags, string item1, IntPtr item2);
 
     private static void CreateShortcut()
     {
