@@ -223,6 +223,7 @@ main.wrap { flex: 1; padding: 20px 0 32px; }
 .foot__in { padding: 14px 0 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
 .foot__dir { min-width: 0; flex: 1 1 260px; overflow-wrap: anywhere; }
 .foot__actions { display: flex; gap: 14px; }
+.foot .pg-sig { flex-basis: 100%; }
 .foot code { padding: 1px 6px; border-radius: 6px; background: var(--pg-surface-2); color: var(--pg-text); }
 .link { padding: 2px 0; border: 0; background: none; color: var(--pg-accent); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 
