@@ -55,8 +55,19 @@ public static class Installer
             RegisterUninstall();
             var psi = new ProcessStartInfo(InstalledExe) { UseShellExecute = false };
             foreach (var a in args) psi.ArgumentList.Add(a);
-            Process.Start(psi);
-            return true;
+            // L'antivirus peut encore analyser l'exe qu'on vient d'écrire : on réessaie un peu.
+            for (var attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    Process.Start(psi);
+                    return true;
+                }
+                catch when (attempt < 20)
+                {
+                    Thread.Sleep(500);
+                }
+            }
         }
         catch
         {
