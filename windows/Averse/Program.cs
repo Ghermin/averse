@@ -40,7 +40,7 @@ internal static class Program
 
         if (Installer.IsRunningInstalled) Installer.RegisterAssociations();
 
-        var form = new MainForm(new Engine(Settings.Load()), links);
+        var form = new MainForm(new Engine(Settings.Load()), links, updated: args.Contains("--updated"));
         StartPipeServer(form);
         Application.Run(form);
         return 0;

@@ -103,6 +103,11 @@ class MainActivity : Activity() {
         handleIntent(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        Updater.maybeUpdate(this, engine)
+    }
+
     override fun onStop() {
         super.onStop()
         engine.handler.post { engine.saveAll() }

@@ -140,6 +140,10 @@ public sealed class Engine
         settings.Save();
     }
 
+    /// <summary>Vrai si un torrent est en train de télécharger (on ne redémarre pas pour une mise à jour).</summary>
+    public bool IsBusy => engine != null && engine.Torrents.Any(m => m.State is TorrentState.Downloading
+        or TorrentState.Metadata or TorrentState.Hashing or TorrentState.Starting or TorrentState.FetchingHashes);
+
     private static string Id(TorrentManager m) => m.InfoHashes.V1OrV2.ToHex().ToLowerInvariant();
 
     private TorrentManager Find(string? id) =>

@@ -18,9 +18,19 @@ public sealed class MainForm : Form
     private bool engineReady;
     private bool closing;
 
-    public MainForm(Engine engine, IEnumerable<string> links)
+    // Mises à jour automatiques (comme CamTel) : au lancement puis toutes les 6 h.
+    private readonly bool updated;
+    private readonly DateTime startedAt = DateTime.UtcNow;
+    private readonly System.Windows.Forms.Timer updateTimer = new() { Interval = 10 * 60 * 1000 };
+    private DateTime nextUpdateCheck;
+    private string? pendingUpdate;
+    private bool checkingUpdate;
+    private bool waitingToldUser;
+
+    public MainForm(Engine engine, IEnumerable<string> links, bool updated)
     {
         this.engine = engine;
+        this.updated = updated;
         foreach (var l in links) pendingLinks.Enqueue(l);
 
         Text = "Averse";
@@ -62,6 +72,61 @@ public sealed class MainForm : Form
         }
         engineReady = true;
         while (pendingLinks.Count > 0) await AddExternalAsync(pendingLinks.Dequeue());
+
+        if (updated)
+        {
+            Updater.CleanUp();
+            _ = ToastLaterAsync($"Averse a été mis à jour (version {Updater.Current}).");
+        }
+        updateTimer.Tick += (_, _) => _ = AutoUpdateAsync();
+        updateTimer.Start();
+        _ = AutoUpdateAsync();
+    }
+
+    /// <summary>
+    /// Cherche une nouvelle version sur GitHub au lancement puis toutes les 6 heures. Elle est téléchargée
+    /// en arrière-plan et installée tout de suite si rien ne se télécharge (ou si Averse vient d'être ouvert),
+    /// sinon dès que les téléchargements en cours sont finis. Les torrents reprennent tout seuls.
+    /// </summary>
+    private async Task AutoUpdateAsync()
+    {
+        if (!Installer.IsRunningInstalled || checkingUpdate || closing) return;
+        if (pendingUpdate != null)
+        {
+            if (CanRestartNow()) Updater.Apply(pendingUpdate);
+            return;
+        }
+        if (DateTime.UtcNow < nextUpdateCheck) return;
+        nextUpdateCheck = DateTime.UtcNow.AddHours(6);
+        checkingUpdate = true;
+        try
+        {
+            var release = await Updater.CheckAsync();
+            if (release == null) return;
+            pendingUpdate = await Updater.DownloadAsync(release);
+            if (pendingUpdate == null) return;
+            if (CanRestartNow())
+            {
+                Updater.Apply(pendingUpdate);
+            }
+            else if (!waitingToldUser)
+            {
+                waitingToldUser = true;
+                Toast($"Averse {release.Version} est prêt : il s'installera à la fin des téléchargements.");
+            }
+        }
+        finally
+        {
+            checkingUpdate = false;
+        }
+    }
+
+    private bool CanRestartNow() => DateTime.UtcNow - startedAt < TimeSpan.FromMinutes(2) || !engine.IsBusy;
+
+    private async Task ToastLaterAsync(string message)
+    {
+        await Task.Delay(2500);
+        Toast(message);
     }
 
     private async Task InitWebAsync()
@@ -285,6 +350,7 @@ public sealed class MainForm : Form
         if (closing) return;
         e.Cancel = true;
         closing = true;
+        updateTimer.Stop();
         Hide();
         if (engineReady) await engine.StopAsync();
         Application.Exit();

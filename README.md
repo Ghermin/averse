@@ -12,7 +12,7 @@ c'est téléchargé. Pas de pub, pas de logiciel caché à l'installation, pas d
 
 Ajouter (lien magnet, empreinte, adresse d'un .torrent, fichier .torrent ouvert, glissé ou partagé), voir la progression,
 le débit, le temps restant et les pairs, mettre en pause, reprendre, retirer (avec ou sans les fichiers), ouvrir le dossier.
-Les torrents reprennent où ils en étaient au lancement suivant. Thème clair / sombre selon le système.
+Les torrents reprennent où ils en étaient au lancement suivant. Mises à jour automatiques depuis les versions GitHub (comme CamTel), jamais au milieu d'un téléchargement. Thème clair / sombre selon le système.
 
 ## Comment c'est fait
 
