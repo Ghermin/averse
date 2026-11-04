@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Averse</title>
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="playground.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="pg-page">
+  <header class="bar">
+    <div class="bar__in">
+      <span class="brand"><img src="icon.svg" alt="" width="34" height="34"> Averse</span>
+      <ul class="pg-chips totals" role="list" aria-label="Vitesse totale">
+        <li><span aria-hidden="true">↓</span> <span id="total-down">0 o/s</span></li>
+        <li><span aria-hidden="true">↑</span> <span id="total-up">0 o/s</span></li>
+      </ul>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="add pg-card" aria-label="Ajouter un torrent">
+      <form id="magnet-form" class="add__row" autocomplete="off">
+        <label class="sr" for="magnet">Lien magnet</label>
+        <input id="magnet" name="magnet" type="text" inputmode="url" spellcheck="false"
+               placeholder="Colle un lien magnet…" enterkeyhint="go">
+        <button class="pg-btn pg-btn--primary" type="submit">Ajouter</button>
+      </form>
+      <div class="add__alt">
+        <button id="pick" class="pg-btn" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zm4 18H6V4h7v5h5zm-7-1h2v-4h3l-4-4-4 4h3z"/></svg>
+          Ouvrir un fichier .torrent
+        </button>
+        <span class="add__hint" id="drop-hint">ou glisse-le dans la fenêtre</span>
+      </div>
+    </section>
+
+    <section aria-label="Téléchargements">
+      <ul id="list" class="list" role="list"></ul>
+      <div id="empty" class="empty" hidden>
+        <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M20 10.5l-3.5 8M31 9l-3.5 8M42 10.5l-3.5 8" stroke="currentColor" stroke-opacity=".45" stroke-width="3" stroke-linecap="round"/><path d="M32 26v19M23.5 37l8.5 8.5 8.5-8.5" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 53h26" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>
+        <p><strong>Rien en cours.</strong><br>Colle un lien magnet ou ouvre un fichier .torrent pour commencer.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="foot__in">
+      <span class="foot__dir">Dossier : <code id="dir">…</code></span>
+      <span class="foot__actions">
+        <button id="change-dir" class="link" type="button" hidden>Changer</button>
+        <button id="open-dir" class="link" type="button">Ouvrir</button>
+      </span>
+    </div>
+  </footer>
+
+  <div id="drop" class="drop" hidden><p>Dépose le fichier .torrent</p></div>
+
+  <dialog id="confirm" class="dlg">
+    <form method="dialog">
+      <h2>Retirer ce torrent ?</h2>
+      <p id="confirm-name" class="dlg__name"></p>
+      <label class="check"><input id="confirm-files" type="checkbox"> Supprimer aussi les fichiers téléchargés</label>
+      <div class="dlg__actions">
+        <button class="pg-btn" value="cancel">Annuler</button>
+        <button class="pg-btn pg-btn--danger" value="ok">Retirer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <template id="item">
+    <li class="item">
+      <div class="item__head">
+        <p class="item__name"></p>
+        <div class="item__actions">
+          <button class="icon-btn" data-act="toggle" type="button"></button>
+          <button class="icon-btn" data-act="open" type="button" title="Ouvrir le dossier" aria-label="Ouvrir le dossier">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20 6h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2m0 12H4V8h16z"/></svg>
+          </button>
+          <button class="icon-btn" data-act="remove" type="button" title="Retirer" aria-label="Retirer">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 3v1H4v2h1v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6h1V4h-5V3zM7 6h10v13H7zm2 2v9h2V8zm4 0v9h2V8z"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="bar-track"><div class="bar-fill"></div></div>
+      <p class="item__meta"><span class="item__state"></span><span class="item__info"></span></p>
+    </li>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>

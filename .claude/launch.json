@@ -1,0 +1,7 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "ui", "runtimeExecutable": "python", "runtimeArgs": ["-m", "http.server", "5191", "-d", "ui"], "port": 5191 },
+    { "name": "docs", "runtimeExecutable": "python", "runtimeArgs": ["-m", "http.server", "5192", "-d", "docs"], "port": 5192 }
+  ]
+}

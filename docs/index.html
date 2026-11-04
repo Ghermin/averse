@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#0e0e12" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f6f5f1" media="(prefers-color-scheme: light)">
+  <title>Averse – le client torrent sans pub</title>
+  <meta name="description" content="Un client torrent simple pour Windows et Android : colle un lien magnet ou ouvre un .torrent, c'est téléchargé. Sans pub, sans bloatware, gratuit et open source.">
+  <meta property="og:title" content="Averse – le client torrent sans pub">
+  <meta property="og:description" content="Windows et Android. Lien magnet ou .torrent, et c'est tout. Gratuit et open source.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://ghermin.github.io/averse/">
+  <meta property="og:image" content="https://ghermin.github.io/averse/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400..800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="playground.css">
+  <style>
+    :root {
+      --pg-accent: #3557f5; --pg-accent-2: #0fb5d4;
+      --ok: #12a06a;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --pg-accent: #7d93ff; --pg-accent-2: #3fd3ec; --pg-on-accent: #0b0f1f; --ok: #3ccf91; }
+    }
+    * { box-sizing: border-box; }
+    body { font-family: "Outfit", system-ui, sans-serif; font-size: 16.5px; }
+    a { color: var(--pg-accent); }
+
+    .version { margin-top: 22px; }
+    .version b { color: var(--pg-text); font-weight: 500; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+
+    .downloads { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 36px; }
+    .downloads .pg-card { display: flex; flex-direction: column; }
+    .downloads .pg-card.highlight { border-color: var(--pg-accent); box-shadow: 0 0 0 1px var(--pg-accent) inset, var(--pg-shadow-hover); }
+    .downloads h2 { margin: 0 0 4px; font-size: 22px; letter-spacing: -.02em; display: flex; align-items: center; gap: 10px; }
+    .downloads h2 svg { width: 26px; height: 26px; flex: none; }
+    .sub { margin: 0 0 18px; font: 12.5px/1.6 var(--pg-mono); color: var(--pg-muted); }
+    .body { display: flex; gap: 18px; align-items: flex-start; flex: 1; }
+    .body ul { margin: 0; padding-left: 18px; color: var(--pg-muted); font-size: 15.5px; }
+    .body li { margin-bottom: 4px; }
+    .body li b { color: var(--pg-text); }
+    .qr { flex: none; background: #fff; border-radius: var(--pg-radius-sm); padding: 8px; width: 132px; height: 132px; border: 1px solid var(--pg-line); }
+    .qr canvas, .qr img { width: 116px !important; height: 116px !important; display: block; }
+    .qr-label { font: 11px/1.4 var(--pg-mono); color: var(--pg-muted); text-align: center; margin-top: 6px; }
+    .downloads .pg-btn { width: 100%; margin-top: 22px; }
+    .dl-meta { margin-top: 10px; font: 12px/1.4 var(--pg-mono); color: var(--pg-muted); text-align: center; min-height: 1.4em; }
+
+    .shots { display: grid; grid-template-columns: 1fr auto; gap: 22px; align-items: end; }
+    .shot { margin: 0; border: 1px solid var(--pg-line); border-radius: var(--pg-radius-lg); overflow: hidden; box-shadow: var(--pg-shadow-hover); background: var(--pg-surface); }
+    .shot img { display: block; width: 100%; height: auto; }
+    .shot--phone { width: min(260px, 100%); border-radius: 30px; border-width: 6px; border-color: var(--pg-surface-2); }
+    .shot .dark { display: none; }
+    @media (prefers-color-scheme: dark) {
+      .shot .light { display: none; }
+      .shot .dark { display: block; }
+    }
+
+    .feature { padding: 20px 22px; }
+    main { padding-bottom: clamp(64px, 10vw, 112px); }
+
+    @media (max-width: 760px) {
+      .downloads { grid-template-columns: 1fr; }
+      .qr-box { display: none; }
+      .shots { grid-template-columns: 1fr; justify-items: center; }
+    }
+  </style>
+</head>
+<body class="pg-page">
+  <nav class="pg-strip" aria-label="Bored Dev Playground">
+    <div class="pg-strip__in">
+      <a class="pg-strip__home" href="https://ghermin.github.io/">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="pg-logo" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c5cff"/><stop offset="1" stop-color="#ff6b6b"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="url(#pg-logo)"/><path d="M14 27h14M36 27h14" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/><path d="M16 27a5 5 0 0 0 10 0zM38 27a5 5 0 0 0 10 0z" fill="#fff"/><rect x="24" y="41" width="16" height="4.5" rx="2.25" fill="#fff"/></svg>
+        <b>bored dev playground</b><span class="pg-strip__crumb">/ averse</span>
+      </a>
+      <a class="pg-strip__all" href="https://ghermin.github.io/">tous les projets <span aria-hidden="true">→</span></a>
+    </div>
+  </nav>
+
+  <header class="pg-top">
+    <a class="pg-brand" href="./"><img src="icon.svg" alt="">Averse</a>
+    <nav class="pg-nav">
+      <a href="#apercu">Aperçu</a>
+      <a href="#faq">Questions</a>
+      <a class="pg-gh" href="https://github.com/Ghermin/averse"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.530 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.080.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg> GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="pg-hero">
+      <div class="pg-hero__tags">
+        <p class="pg-kicker">~/projets/averse</p>
+        <ul class="pg-chips" role="list"><li>Windows</li><li>Android</li><li>Torrent</li></ul>
+      </div>
+      <h1>Le client torrent <span class="pg-grad">sans pub</span>.</h1>
+      <p class="pg-lead">Colle un lien magnet ou ouvre un fichier .torrent : c'est téléchargé. Pas de pub, pas de logiciel caché
+        à l'installation, pas de mille réglages. Sur PC et sur téléphone, gratuit et open source.</p>
+      <span class="pg-chip version" id="version"><span class="dot"></span> Dernière version : <b id="ver">…</b></span>
+
+      <div class="downloads">
+        <div class="pg-card" id="card-windows">
+          <h2>
+            <svg viewBox="0 0 24 24" fill="#5b9bf3" aria-hidden="true"><path d="M3 5.5l7.5-1v7H3v-6zm0 13l7.5 1v-7H3v6zm8.5 1.1L21 21v-8.5h-9.5v7.1zm0-15.2v7.1H21V3l-9.5 1.4z"/></svg>
+            PC Windows
+          </h2>
+          <p class="sub">Windows 10 / 11, 64 bits · un seul fichier</p>
+          <div class="body">
+            <ul>
+              <li>Lance <b>Averse.exe</b> : il s'installe tout seul (menu Démarrer).</li>
+              <li>Les liens magnet et les fichiers .torrent s'ouvrent ensuite dans Averse.</li>
+              <li>Les fichiers arrivent dans <b>Téléchargements</b>.</li>
+            </ul>
+          </div>
+          <a class="pg-btn pg-btn--primary" id="dl-exe" href="https://github.com/Ghermin/averse/releases/latest/download/Averse.exe">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+            Télécharger Averse.exe
+          </a>
+          <div class="dl-meta" id="meta-exe"></div>
+        </div>
+
+        <div class="pg-card" id="card-android">
+          <h2>
+            <svg viewBox="0 0 24 24" fill="#3ddc84" aria-hidden="true"><path d="M17.6 9.48l1.84-3.18a.38.38 0 0 0-.66-.38l-1.860 3.22a11.4 11.4 0 0 0-9.84 0L5.22 5.92a.38.38 0 0 0-.66.38L6.4 9.48A10.8 10.8 0 0 0 1 18h22a10.8 10.8 0 0 0-5.4-8.52zM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z"/></svg>
+            Téléphone Android
+          </h2>
+          <p class="sub">Android 8 ou plus récent</p>
+          <div class="body">
+            <div class="qr-box">
+              <div class="qr" id="qr"></div>
+              <div class="qr-label">Scanne avec le téléphone</div>
+            </div>
+            <ul>
+              <li>Installe l'APK (autorise les « applis inconnues »).</li>
+              <li>Touche un lien magnet : Averse s'ouvre et télécharge.</li>
+              <li>Ça continue écran éteint ; les fichiers vont dans <b>Téléchargements/Averse</b>.</li>
+            </ul>
+          </div>
+          <a class="pg-btn pg-btn--primary" id="dl-apk" href="https://github.com/Ghermin/averse/releases/latest/download/Averse.apk">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+            Télécharger Averse.apk
+          </a>
+          <div class="dl-meta" id="meta-apk"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="pg-section" id="apercu">
+      <p class="pg-kicker">Aperçu</p>
+      <h2>Un champ, un bouton, la liste</h2>
+      <p class="pg-section__lead">La même appli sur le PC et le téléphone, en clair ou en sombre selon ton système.</p>
+      <div class="shots">
+        <figure class="shot">
+          <img class="light" src="screen-pc-light.png" alt="Averse sur PC : un torrent en cours de téléchargement, un terminé, un en pause" width="1200" height="820" loading="lazy">
+          <img class="dark" src="screen-pc-dark.png" alt="" width="1200" height="820" loading="lazy">
+        </figure>
+        <figure class="shot shot--phone">
+          <img class="light" src="screen-phone-light.png" alt="Averse sur un téléphone Android" width="390" height="844" loading="lazy">
+          <img class="dark" src="screen-phone-dark.png" alt="" width="390" height="844" loading="lazy">
+        </figure>
+      </div>
+    </section>
+
+    <section class="pg-section">
+      <p class="pg-kicker">Ce que tu as</p>
+      <h2>Le nécessaire, rien de plus</h2>
+      <div class="pg-grid">
+        <div class="pg-card feature"><h3>Liens magnet et .torrent</h3><p>Colle un lien, ouvre ou glisse un fichier. Les liens cliqués dans le navigateur arrivent directement.</p></div>
+        <div class="pg-card feature"><h3>Pause, reprise, retrait</h3><p>Avec ou sans suppression des fichiers. Tout reprend où ça en était au prochain lancement.</p></div>
+        <div class="pg-card feature"><h3>Vitesse et temps restant</h3><p>Progression, débit, pairs connectés. Les infos utiles, pas un tableau de bord.</p></div>
+        <div class="pg-card feature"><h3>Sans pub ni bloatware</h3><p>Pas de bannière, pas d'offre « partenaire » à l'installation, pas de compte.</p></div>
+        <div class="pg-card feature"><h3>Moteur éprouvé</h3><p>libtorrent sur Android, MonoTorrent sur PC : DHT, échange de pairs, chiffrement, UPnP.</p></div>
+        <div class="pg-card feature"><h3>Libre et gratuit</h3><p>Code ouvert sur GitHub, sous licence MIT.</p></div>
+      </div>
+    </section>
+
+    <section class="pg-section" id="faq">
+      <p class="pg-kicker">Questions fréquentes</p>
+      <h2>Un souci ?</h2>
+      <div class="pg-faq">
+        <details>
+          <summary>Windows affiche « Windows a protégé votre ordinateur »</summary>
+          <p>Averse.exe n'est pas signé par un certificat payant. Clique sur <b>Informations complémentaires</b> puis <b>Exécuter quand même</b>. C'est à faire une seule fois.</p>
+        </details>
+        <details>
+          <summary>Le pare-feu Windows demande une autorisation</summary>
+          <p>Clique sur <b>Autoriser</b> : les autres participants pourront se connecter à toi, et les téléchargements iront plus vite. Si tu as refusé, Averse marche quand même, juste avec moins de sources.</p>
+        </details>
+        <details>
+          <summary>Play Protect demande d'analyser l'appli</summary>
+          <p>L'appli ne vient pas du Play Store, donc Google ne la connaît pas. Tu peux l'envoyer pour analyse ou l'installer sans analyse.</p>
+        </details>
+        <details>
+          <summary>Où sont mes fichiers ?</summary>
+          <p>Sur PC, dans <b>Téléchargements</b> (le lien « Changer » en bas de la fenêtre choisit un autre dossier). Sur Android, dans <b>Téléchargements/Averse</b>, visible depuis l'appli Fichiers. Le bouton dossier à côté de chaque torrent l'ouvre directement.</p>
+        </details>
+        <details>
+          <summary>Ça continue si je ferme l'appli ?</summary>
+          <p>Sur le téléphone, oui : tant qu'un téléchargement est en cours, une notification reste affichée et Averse continue, même écran éteint. Sur PC, fermer la fenêtre met tout en pause ; ça reprend au prochain lancement.</p>
+        </details>
+        <details>
+          <summary>Attention aux données mobiles</summary>
+          <p>Averse télécharge aussi en 4G / 5G. Pour les gros fichiers, mieux vaut être en Wi-Fi.</p>
+        </details>
+        <details>
+          <summary>Comment mettre à jour ou désinstaller ?</summary>
+          <p>Pour mettre à jour, retélécharge depuis cette page et lance le fichier : il remplace l'ancienne version, tes torrents sont gardés. Pour désinstaller sur PC : Paramètres → Applications → Averse. Tes fichiers téléchargés ne sont jamais supprimés.</p>
+        </details>
+        <details>
+          <summary>Je peux tout télécharger ?</summary>
+          <p>Averse ne fournit aucun contenu : c'est un outil, comme un navigateur. Les distributions Linux, les logiciels libres et les œuvres libres de droits, oui ; le reste dépend du droit d'auteur, à toi de le respecter.</p>
+        </details>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="pg-foot">
+    <div class="pg-foot__in">
+      <p>Averse est open source (licence MIT) · <a href="https://github.com/Ghermin/averse">code source</a> · <a href="https://github.com/Ghermin/averse/releases">toutes les versions</a></p>
+      <p>Un projet du <a href="https://ghermin.github.io/">Bored Dev Playground</a>, par <a href="https://github.com/Ghermin">Ghermin</a></p>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script>
+    const APK = 'https://github.com/Ghermin/averse/releases/latest/download/Averse.apk';
+
+    try {
+      new QRCode(document.getElementById('qr'), { text: APK, width: 232, height: 232, correctLevel: QRCode.CorrectLevel.M });
+    } catch (e) { document.querySelector('.qr-box')?.remove(); }
+
+    // Mettre en avant le bon téléchargement selon l'appareil.
+    const ua = navigator.userAgent;
+    if (/Android/i.test(ua)) {
+      document.getElementById('card-android').classList.add('highlight');
+      document.querySelector('.downloads').prepend(document.getElementById('card-android'));
+    } else if (/Windows/i.test(ua)) {
+      document.getElementById('card-windows').classList.add('highlight');
+    }
+
+    // Version, date et tailles de la dernière version, depuis GitHub.
+    const mb = n => (n / 1048576).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' Mo';
+    fetch('https://api.github.com/repos/Ghermin/averse/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(rel => {
+        const date = new Date(rel.published_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+        document.getElementById('ver').textContent = rel.tag_name + ' · ' + date;
+        for (const a of rel.assets) {
+          if (a.name === 'Averse.apk') document.getElementById('meta-apk').textContent = rel.tag_name + ' · ' + mb(a.size);
+          if (a.name === 'Averse.exe') document.getElementById('meta-exe').textContent = rel.tag_name + ' · ' + mb(a.size);
+        }
+      })
+      .catch(() => { document.getElementById('version').style.display = 'none'; });
+  </script>
+</body>
+</html>
