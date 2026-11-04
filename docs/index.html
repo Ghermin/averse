@@ -55,15 +55,6 @@
     .downloads .pg-btn { width: 100%; margin-top: 22px; }
     .dl-meta { margin-top: 10px; font: 12px/1.4 var(--pg-mono); color: var(--pg-muted); text-align: center; min-height: 1.4em; }
 
-    .shots { display: grid; grid-template-columns: 1fr auto; gap: 22px; align-items: end; }
-    .shot { margin: 0; border: 1px solid var(--pg-line); border-radius: var(--pg-radius-lg); overflow: hidden; box-shadow: var(--pg-shadow-hover); background: var(--pg-surface); }
-    .shot img { display: block; width: 100%; height: auto; }
-    .shot--phone { width: min(260px, 100%); border-radius: 30px; border-width: 6px; border-color: var(--pg-surface-2); }
-    .shot .dark { display: none; }
-    @media (prefers-color-scheme: dark) {
-      .shot .light { display: none; }
-      .shot .dark { display: block; }
-    }
 
     .feature { padding: 20px 22px; }
     main { padding-bottom: clamp(64px, 10vw, 112px); }
@@ -71,7 +62,6 @@
     @media (max-width: 760px) {
       .downloads { grid-template-columns: 1fr; }
       .qr-box { display: none; }
-      .shots { grid-template-columns: 1fr; justify-items: center; }
     }
   </style>
 </head>
@@ -89,7 +79,7 @@
   <header class="pg-top">
     <a class="pg-brand" href="./"><img src="icon.svg" alt="">Averse</a>
     <nav class="pg-nav">
-      <a href="#apercu">Aperçu</a>
+      <a href="#fonctions">Fonctions</a>
       <a href="#faq">Questions</a>
       <a class="pg-gh" href="https://github.com/Ghermin/averse"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.530 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.080.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg> GitHub</a>
     </nav>
@@ -141,7 +131,7 @@
             <ul>
               <li>Installe l'APK (autorise les « applis inconnues »).</li>
               <li>Touche un lien magnet : Averse s'ouvre et télécharge.</li>
-              <li>Ça continue écran éteint ; les fichiers vont dans <b>Téléchargements/Averse</b>.</li>
+              <li>Ça continue écran éteint ; les fichiers vont dans <b>Téléchargements</b>.</li>
             </ul>
           </div>
           <a class="pg-btn pg-btn--primary" id="dl-apk" href="https://github.com/Ghermin/averse/releases/latest/download/Averse.apk">
@@ -153,33 +143,16 @@
       </div>
     </section>
 
-    <section class="pg-section" id="apercu">
-      <p class="pg-kicker">Aperçu</p>
-      <h2>Un champ, un bouton, la liste</h2>
-      <p class="pg-section__lead">La même appli sur le PC et le téléphone, en clair ou en sombre selon ton système.</p>
-      <div class="shots">
-        <figure class="shot">
-          <img class="light" src="screen-pc-light.png" alt="Averse sur PC : un torrent en cours de téléchargement, un terminé, un en pause" width="1200" height="820" loading="lazy">
-          <img class="dark" src="screen-pc-dark.png" alt="" width="1200" height="820" loading="lazy">
-        </figure>
-        <figure class="shot shot--phone">
-          <img class="light" src="screen-phone-light.png" alt="Averse sur un téléphone Android" width="390" height="844" loading="lazy">
-          <img class="dark" src="screen-phone-dark.png" alt="" width="390" height="844" loading="lazy">
-        </figure>
-      </div>
-    </section>
-
-    <section class="pg-section">
+    <section class="pg-section" id="fonctions">
       <p class="pg-kicker">Ce que tu as</p>
       <h2>Le nécessaire, rien de plus</h2>
       <div class="pg-grid">
         <div class="pg-card feature"><h3>Liens magnet et .torrent</h3><p>Colle un lien, ouvre ou glisse un fichier. Les liens cliqués dans le navigateur arrivent directement.</p></div>
         <div class="pg-card feature"><h3>Pause, reprise, retrait</h3><p>Avec ou sans suppression des fichiers. Tout reprend où ça en était au prochain lancement.</p></div>
         <div class="pg-card feature"><h3>Vitesse et temps restant</h3><p>Progression, débit, pairs connectés. Les infos utiles, pas un tableau de bord.</p></div>
-        <div class="pg-card feature"><h3>Sans pub ni bloatware</h3><p>Pas de bannière, pas d'offre « partenaire » à l'installation, pas de compte.</p></div>
+        <div class="pg-card feature"><h3>Sans pub, libre et gratuit</h3><p>Pas de bannière, pas d'offre « partenaire » à l'installation, pas de compte. Code ouvert sur GitHub (MIT).</p></div>
         <div class="pg-card feature"><h3>Moteur éprouvé</h3><p>libtorrent sur Android, MonoTorrent sur PC : DHT, échange de pairs, chiffrement, UPnP.</p></div>
         <div class="pg-card feature"><h3>Mises à jour automatiques</h3><p>PC et téléphone se mettent à jour tout seuls, jamais au milieu d'un téléchargement.</p></div>
-        <div class="pg-card feature"><h3>Libre et gratuit</h3><p>Code ouvert sur GitHub, sous licence MIT.</p></div>
       </div>
     </section>
 
@@ -201,7 +174,7 @@
         </details>
         <details>
           <summary>Où sont mes fichiers ?</summary>
-          <p>Sur PC, dans <b>Téléchargements</b> (le lien « Changer » en bas de la fenêtre choisit un autre dossier). Sur Android, dans <b>Téléchargements/Averse</b>, visible depuis l'appli Fichiers. Le bouton dossier à côté de chaque torrent l'ouvre directement.</p>
+          <p>Sur PC, dans <b>Téléchargements</b> (le lien « Changer » en bas de la fenêtre choisit un autre dossier). Sur Android, dans <b>Téléchargements</b>, visible depuis l'appli Fichiers. Le bouton dossier à côté de chaque torrent l'ouvre directement.</p>
         </details>
         <details>
           <summary>Ça continue si je ferme l'appli ?</summary>

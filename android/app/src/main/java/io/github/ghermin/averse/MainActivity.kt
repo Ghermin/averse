@@ -227,7 +227,7 @@ class MainActivity : Activity() {
     // ---------- Ouvrir un téléchargement ----------
 
     private fun openDownloads() {
-        // D'abord le dossier Download/Averse lui-même dans l'appli Fichiers, sinon la vue Téléchargements.
+        // D'abord le dossier Download lui-même dans l'appli Fichiers, sinon la vue Téléchargements.
         val root = android.os.Environment.getExternalStorageDirectory().absolutePath
         val dir = engine.downloadDir.absolutePath
         if (dir.startsWith("$root/")) {

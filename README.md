@@ -6,7 +6,7 @@ c'est téléchargé. Pas de pub, pas de logiciel caché à l'installation, pas d
 **Télécharger : https://ghermin.github.io/averse/**
 
 - PC : [Averse.exe](https://github.com/Ghermin/averse/releases/latest/download/Averse.exe) (Windows 10 / 11, 64 bits). Il s'installe tout seul dans le menu Démarrer et ouvre les liens magnet et les fichiers .torrent.
-- Téléphone : [Averse.apk](https://github.com/Ghermin/averse/releases/latest/download/Averse.apk) (Android 8 ou plus). Les téléchargements continuent écran éteint et vont dans `Téléchargements/Averse`.
+- Téléphone : [Averse.apk](https://github.com/Ghermin/averse/releases/latest/download/Averse.apk) (Android 8 ou plus). Les téléchargements continuent écran éteint et vont dans `Téléchargements`.
 
 ## Ce que ça fait
 

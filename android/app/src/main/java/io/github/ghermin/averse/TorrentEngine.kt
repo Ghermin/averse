@@ -103,9 +103,9 @@ class TorrentEngine(private val context: Context) {
         return p
     }
 
-    /** Download/Averse si le téléphone le permet, sinon le dossier de l'appli. */
+    /** Le dossier Download du téléphone, sinon (vieux téléphones sans accès) le dossier de l'appli. */
     private fun chooseDownloadDir(): File {
-        val pub = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Averse")
+        val pub = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
         try {
             pub.mkdirs()
             val probe = File(pub, ".averse-test")
@@ -113,7 +113,7 @@ class TorrentEngine(private val context: Context) {
             probe.delete()
             return pub
         } catch (e: Exception) {
-            Log.w(TAG, "Download/Averse inaccessible", e)
+            Log.w(TAG, "Download inaccessible", e)
         }
         val own = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "Averse")
         own.mkdirs()
