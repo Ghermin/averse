@@ -22,6 +22,14 @@ internal static class Program
             return 0;
         }
 
+        // Remettre Averse par défaut pour magnet et .torrent, sans ouvrir la fenêtre.
+        if (args.Contains("--set-defaults") || args.Contains("--repair-defaults"))
+        {
+            Installer.RegisterAssociations();
+            DefaultApps.Apply(force: args.Contains("--set-defaults"));
+            return 0;
+        }
+
         // L'exe téléchargé s'installe dans %LOCALAPPDATA%\Programs\Averse et se relance de là.
         if (!Installer.IsRunningInstalled && !args.Contains("--portable") && !System.Diagnostics.Debugger.IsAttached)
         {
@@ -38,7 +46,13 @@ internal static class Program
             return 0;
         }
 
-        if (Installer.IsRunningInstalled) Installer.RegisterAssociations();
+        if (Installer.IsRunningInstalled)
+        {
+            Installer.RegisterAssociations();
+            // Première installation : Averse devient l'appli par défaut. Ensuite il ne reprend la place
+            // que si le choix actuel est cassé (aucune appli, ou une appli désinstallée).
+            DefaultApps.Apply(force: args.Contains("--first-install"));
+        }
 
         var form = new MainForm(new Engine(Settings.Load()), links, updated: args.Contains("--updated"));
         StartPipeServer(form);

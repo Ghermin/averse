@@ -35,6 +35,8 @@ public static class Installer
         try
         {
             CloseRunningInstance();
+            var firstInstall = !File.Exists(InstalledExe);
+            if (firstInstall) args = [.. args, "--first-install"];
             Directory.CreateDirectory(InstallDir);
             for (var attempt = 0; ; attempt++)
             {
