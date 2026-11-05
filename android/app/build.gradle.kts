@@ -11,7 +11,7 @@ android {
         applicationId = "io.github.ghermin.averse"
         minSdk = 26
         targetSdk = 35
-        versionName = System.getenv("AVERSE_VERSION_NAME") ?: "1.0.5"
+        versionName = System.getenv("AVERSE_VERSION_NAME") ?: "1.0.6"
         // 1.2.3 → 10203 : toujours croissant d'une version à l'autre (la 1.0.0 publiée avait 1).
         versionCode = System.getenv("AVERSE_VERSION_CODE")?.toInt()
             ?: versionName!!.split('.').map { it.toIntOrNull() ?: 0 }.let { (it + listOf(0, 0, 0)).take(3) }
