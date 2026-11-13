@@ -19,6 +19,7 @@
   --ok: #12a06a;
   --danger: #d93a45;
   --font: "Outfit", system-ui, sans-serif;
+  --pg-font: var(--font);  /* police embarquée (fonts/), l'appli doit marcher hors ligne */
 }
 @media (prefers-color-scheme: dark) {
   :root {

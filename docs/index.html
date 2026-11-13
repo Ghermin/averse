@@ -21,29 +21,34 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400..800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,200..800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="playground.css">
   <style>
     :root {
+      --pg-bg: #f2f5fc; --pg-surface: #ffffff; --pg-surface-2: #e8edf9; --pg-text: #12162e; --pg-muted: #575e7c;
+      --pg-line: #dbe1f0; --pg-dot: rgba(18, 22, 46, .08);
       --pg-accent: #3557f5; --pg-accent-2: #0fb5d4;
-      --ok: #12a06a;
     }
     @media (prefers-color-scheme: dark) {
-      :root { --pg-accent: #7d93ff; --pg-accent-2: #3fd3ec; --pg-on-accent: #0b0f1f; --ok: #3ccf91; }
+      :root {
+        --pg-bg: #0b0e1b; --pg-surface: #141829; --pg-surface-2: #1c2137; --pg-text: #eef0fa; --pg-muted: #9ea4bf;
+        --pg-line: #262b44; --pg-dot: rgba(238, 240, 250, .06);
+        --pg-accent: #7d93ff; --pg-accent-2: #3fd3ec; --pg-on-accent: #0b0f1f;
+      }
     }
     * { box-sizing: border-box; }
-    body { font-family: "Outfit", system-ui, sans-serif; font-size: 16.5px; }
+    body { font-size: 16.5px; }
     a { color: var(--pg-accent); }
 
     .version { margin-top: 22px; }
     .version b { color: var(--pg-text); font-weight: 500; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pg-accent-2); }
 
     .downloads { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 36px; }
     .downloads .pg-card { display: flex; flex-direction: column; }
     .downloads .pg-card.highlight { border-color: var(--pg-accent); box-shadow: 0 0 0 1px var(--pg-accent) inset, var(--pg-shadow-hover); }
     .downloads h2 { margin: 0 0 4px; font-size: 22px; letter-spacing: -.02em; display: flex; align-items: center; gap: 10px; }
-    .downloads h2 svg { width: 26px; height: 26px; flex: none; }
+    .downloads h2 svg { width: 26px; height: 26px; flex: none; color: var(--pg-accent); }
     .sub { margin: 0 0 18px; font: 12.5px/1.6 var(--pg-mono); color: var(--pg-muted); }
     .body { display: flex; gap: 18px; align-items: flex-start; flex: 1; }
     .body ul { margin: 0; padding-left: 18px; color: var(--pg-muted); font-size: 15.5px; }
@@ -99,7 +104,7 @@
       <div class="downloads">
         <div class="pg-card" id="card-windows">
           <h2>
-            <svg viewBox="0 0 24 24" fill="#5b9bf3" aria-hidden="true"><path d="M3 5.5l7.5-1v7H3v-6zm0 13l7.5 1v-7H3v6zm8.5 1.1L21 21v-8.5h-9.5v7.1zm0-15.2v7.1H21V3l-9.5 1.4z"/></svg>
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.5l7.5-1v7H3v-6zm0 13l7.5 1v-7H3v6zm8.5 1.1L21 21v-8.5h-9.5v7.1zm0-15.2v7.1H21V3l-9.5 1.4z"/></svg>
             PC Windows
           </h2>
           <p class="sub">Windows 10 / 11, 64 bits · un seul fichier</p>
@@ -119,7 +124,7 @@
 
         <div class="pg-card" id="card-android">
           <h2>
-            <svg viewBox="0 0 24 24" fill="#3ddc84" aria-hidden="true"><path d="M17.6 9.48l1.84-3.18a.38.38 0 0 0-.66-.38l-1.860 3.22a11.4 11.4 0 0 0-9.84 0L5.22 5.92a.38.38 0 0 0-.66.38L6.4 9.48A10.8 10.8 0 0 0 1 18h22a10.8 10.8 0 0 0-5.4-8.52zM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z"/></svg>
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.6 9.48l1.84-3.18a.38.38 0 0 0-.66-.38l-1.860 3.22a11.4 11.4 0 0 0-9.84 0L5.22 5.92a.38.38 0 0 0-.66.38L6.4 9.48A10.8 10.8 0 0 0 1 18h22a10.8 10.8 0 0 0-5.4-8.52zM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z"/></svg>
             Téléphone Android
           </h2>
           <p class="sub">Android 8 ou plus récent</p>
