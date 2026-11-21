@@ -224,6 +224,8 @@ public sealed class MainForm : Form
 
     private static void OpenInBrowser(string uri)
     {
+        // Seulement des pages web : jamais file:, ms-settings: ou un autre protocole lancé par ShellExecute.
+        if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsed) || (parsed.Scheme != Uri.UriSchemeHttps && parsed.Scheme != Uri.UriSchemeHttp)) return;
         try
         {
             Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true });

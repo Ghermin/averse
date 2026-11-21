@@ -10,7 +10,7 @@
     <RootNamespace>Averse</RootNamespace>
     <ApplicationIcon>averse.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>1.0.6</Version>
+    <Version>1.0.7</Version>
     <Product>Averse</Product>
     <Description>Averse - client torrent sans pub</Description>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
