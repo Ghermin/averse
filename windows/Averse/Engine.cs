@@ -46,7 +46,7 @@ public sealed class Engine
             DhtEndPoint = new IPEndPoint(IPAddress.Any, settings.Port),
         };
 
-        var factories = Factories.Default.WithPieceWriterCreator(max => new SafeWriter(new DiskWriter(max), IsAllowed));
+        var factories = Factories.Default.WithPieceWriterCreator(max => new SafeWriter(new DiskWriter(max), IsAllowed, IsGone));
         if (File.Exists(StateFile))
         {
             try
@@ -65,8 +65,145 @@ public sealed class Engine
         foreach (var m in engine.Torrents.ToList())
         {
             if (!await AcceptAsync(m)) continue;
+            // MonoTorrent 3.0.2 relit « ne pas télécharger » sans recalculer la progression (le torrent resterait
+            // « en cours ») : on réapplique la priorité d'un de ces fichiers pour qu'il la recalcule.
+            if (m.Files.FirstOrDefault(f => f.Priority == Priority.DoNotDownload) is { } skipped)
+            {
+                await m.SetFilePriorityAsync(skipped, Priority.Normal);
+                await m.SetFilePriorityAsync(skipped, Priority.DoNotDownload);
+            }
+            if (!await ForgetDeletedFilesAsync(m, restart: false)) continue;
             if (!settings.Paused.Contains(Id(m))) await m.StartAsync();
         }
+        deletedFilesTimer = new System.Threading.Timer(_ => ScheduleDeletedFilesCheck(), null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+    }
+
+    // ---------- Fichiers supprimés à la main : jamais retéléchargés ----------
+
+    private static readonly object Gone = new();
+    private readonly ConditionalWeakTable<ITorrentManagerFile, object> goneFiles = new();
+    private readonly ConditionalWeakTable<ITorrentManagerFile, StrongBox<long>> seenOnDisk = new();
+    private readonly SemaphoreSlim deletedFilesLock = new(1, 1);
+    private System.Threading.Timer? deletedFilesTimer;
+    private int deletedFilesCheckQueued;
+
+    /// <summary>
+    /// Le fichier a-t-il été supprimé à la main ? (appelé par <see cref="SafeWriter"/> à chaque lecture / écriture)
+    /// Averse ne met jamais un fichier en « ne pas télécharger » pour une autre raison.
+    /// </summary>
+    private bool IsGone(ITorrentManagerFile file)
+    {
+        if (file.Priority == Priority.DoNotDownload || goneFiles.TryGetValue(file, out _)) return true;
+        // Rien de vérifié dans ce fichier : il n'a peut-être juste pas encore été créé.
+        if (file.BitField.AllFalse) return false;
+        var now = Environment.TickCount64;
+        var seen = seenOnDisk.GetOrCreateValue(file);
+        if (now - Volatile.Read(ref seen.Value) < 2000) return false;
+        try
+        {
+            if (File.Exists(file.FullPath))
+            {
+                Volatile.Write(ref seen.Value, now);
+                return false;
+            }
+            // Disque débranché : ce n'est pas une suppression, MonoTorrent signalera l'erreur.
+            if (Path.GetPathRoot(file.FullPath) is not { } root || !Directory.Exists(root)) return false;
+        }
+        catch
+        {
+            return false;
+        }
+        ScheduleDeletedFilesCheck();
+        return true;
+    }
+
+    private void ScheduleDeletedFilesCheck()
+    {
+        if (engine == null || Interlocked.Exchange(ref deletedFilesCheckQueued, 1) == 1) return;
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(300);
+            Volatile.Write(ref deletedFilesCheckQueued, 0);
+            await deletedFilesLock.WaitAsync();
+            try
+            {
+                foreach (var m in engine.Torrents.ToList())
+                {
+                    try
+                    {
+                        await ForgetDeletedFilesAsync(m, restart: !settings.Paused.Contains(Id(m)));
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine("Deleted files check failed: " + ex.Message);
+                    }
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                // Liste des torrents modifiée pendant la copie : on verra au prochain tour.
+            }
+            finally
+            {
+                deletedFilesLock.Release();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Fichiers supprimés à la main dans le dossier de téléchargement : ils passent en « ne pas télécharger »
+    /// et leurs morceaux sont oubliés. S'il ne reste plus rien du torrent sur le disque, il est retiré de la
+    /// liste. Renvoie false s'il vient d'être retiré.
+    /// </summary>
+    private async Task<bool> ForgetDeletedFilesAsync(TorrentManager m, bool restart)
+    {
+        if (m.Torrent == null || m.State is not (TorrentState.Stopped or TorrentState.Error or TorrentState.Seeding
+                or TorrentState.Downloading))
+            return true;
+        // Dossier de téléchargement absent (disque débranché…) : on ne touche à rien.
+        if (!Directory.Exists(m.SavePath)) return true;
+        var gone = m.Files.Where(f => f.Priority != Priority.DoNotDownload && f.Length > 0 && !f.BitField.AllFalse
+            && !File.Exists(f.FullPath)).ToList();
+        if (gone.Count == 0) return true;
+
+        foreach (var f in gone) goneFiles.AddOrUpdate(f, Gone);
+        var name = m.Torrent.Name;
+        var anyLeft = m.Files.Any(f => f.Priority != Priority.DoNotDownload && !gone.Contains(f) && !f.BitField.AllFalse);
+        if (!anyLeft)
+        {
+            foreach (var f in m.Files) goneFiles.AddOrUpdate(f, Gone);
+            settings.Paused.Remove(Id(m));
+            if (m.State != TorrentState.Stopped) await m.StopAsync(TimeSpan.FromSeconds(3));
+            await engine.RemoveAsync(m, RemoveMode.CacheDataOnly);
+            await SaveAsync();
+            Warning?.Invoke($"« {name} » a été retiré de la liste : ses fichiers ont été supprimés.");
+            return false;
+        }
+
+        foreach (var f in gone) await m.SetFilePriorityAsync(f, Priority.DoNotDownload);
+
+        // Ne plus annoncer aux autres les morceaux qui ne sont plus sur le disque (sauf ceux partagés avec
+        // un fichier gardé). Il faut que le torrent soit arrêté pour ça.
+        if (m.State != TorrentState.Stopped) await m.StopAsync(TimeSpan.FromSeconds(3));
+        try
+        {
+            var resume = await m.SaveFastResumeAsync();
+            var kept = new bool[m.Torrent.PieceCount];
+            foreach (var f in m.Files.Where(f => f.Priority != Priority.DoNotDownload))
+                for (var i = f.StartPieceIndex; i <= f.EndPieceIndex; i++) kept[i] = true;
+            var have = new BitField(resume.Bitfield);
+            foreach (var f in gone)
+                for (var i = f.StartPieceIndex; i <= f.EndPieceIndex; i++)
+                    if (!kept[i]) have[i] = false;
+            await m.LoadFastResumeAsync(new FastResume(m.InfoHashes, have, resume.UnhashedPieces));
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine("Forget pieces failed: " + ex.Message);
+        }
+        if (restart) await m.StartAsync();
+        await SaveAsync();
+        return true;
     }
 
     // ---------- Protection des chemins ----------
@@ -214,6 +351,8 @@ public sealed class Engine
 
     public async Task StopAsync()
     {
+        deletedFilesTimer?.Dispose();
+        await deletedFilesLock.WaitAsync();
         try
         {
             await engine.StopAllAsync(TimeSpan.FromSeconds(4));
@@ -322,8 +461,9 @@ public sealed class Engine
 
     private static JsonObject Describe(TorrentManager m)
     {
-        var size = m.Torrent?.Size ?? 0;
-        var progress = m.Torrent == null ? 0 : m.Progress / 100.0;
+        // Sans les fichiers supprimés à la main (« ne pas télécharger »).
+        var size = m.Torrent == null ? 0 : m.Files.Where(f => f.Priority != Priority.DoNotDownload).Sum(f => f.Length);
+        var progress = m.Torrent == null ? 0 : m.PartialProgress / 100.0;
         var done = (long)(progress * size);
         var down = m.Monitor.DownloadRate;
         var state = m.State switch
@@ -334,7 +474,7 @@ public sealed class Engine
             TorrentState.Downloading => "downloading",
             TorrentState.Seeding => "seeding",
             TorrentState.Error => "error",
-            _ => m.Complete ? "done" : "paused",
+            _ => m.Torrent != null && m.PartialProgress >= 100 ? "done" : "paused",
         };
         return new JsonObject
         {

@@ -9,6 +9,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.libtorrent4j.AddTorrentParams
 import org.libtorrent4j.AlertListener
+import org.libtorrent4j.Priority
 import org.libtorrent4j.SessionHandle
 import org.libtorrent4j.SessionManager
 import org.libtorrent4j.SessionParams
@@ -23,6 +24,9 @@ import org.libtorrent4j.alerts.Alert
 import org.libtorrent4j.alerts.AlertType
 import org.libtorrent4j.alerts.SaveResumeDataAlert
 import org.libtorrent4j.alerts.TorrentAlert
+import org.libtorrent4j.swig.add_torrent_params
+import org.libtorrent4j.swig.bitfield
+import org.libtorrent4j.swig.byte_vector
 import org.libtorrent4j.swig.error_code
 import org.libtorrent4j.swig.libtorrent
 import java.io.File
@@ -87,6 +91,10 @@ class TorrentEngine(private val context: Context) {
                 val p = libtorrent.read_resume_data_ex(Vectors.bytes2byte_vector(f.readBytes()), ec)
                 if (ec.value() != 0) throw IllegalStateException(ec.message())
                 if (p.save_path.isNullOrEmpty()) p.save_path = downloadDir.absolutePath
+                if (forgetDeletedFiles(p) == Deleted.ALL) {
+                    dropDeleted(p, f.name.removeSuffix(".resume"))
+                    return@forEach
+                }
                 session.swig().async_add_torrent(p)
             } catch (e: Exception) {
                 Log.w(TAG, "Reprise impossible pour ${f.name}", e)
@@ -99,6 +107,12 @@ class TorrentEngine(private val context: Context) {
                 handler.postDelayed(this, 30_000)
             }
         }, 30_000)
+        handler.postDelayed(object : Runnable {
+            override fun run() {
+                checkDeletedFiles()
+                handler.postDelayed(this, 10_000)
+            }
+        }, 10_000)
     }
 
     private fun port(): Int {
@@ -141,6 +155,7 @@ class TorrentEngine(private val context: Context) {
         when (alert.type()) {
             AlertType.SAVE_RESUME_DATA -> {
                 val a = alert as SaveResumeDataAlert
+                if (forgetting.remove(id(a.handle())) && forgetInSession(a)) return
                 try {
                     val h = a.handle()
                     val bytes = AddTorrentParams.writeResumeDataBuf(a.params())
@@ -186,6 +201,110 @@ class TorrentEngine(private val context: Context) {
         session.remove(h)
         File(resumeDir, "$hash.resume").delete()
         onWarning?.invoke("« $name » a été refusé : il voulait écrire en dehors du dossier de téléchargement.")
+    }
+
+    // ---------- Fichiers supprimés à la main : jamais retéléchargés ----------
+
+    private enum class Deleted { NONE, SOME, ALL }
+
+    /** Torrents dont on attend les données de reprise pour oublier des fichiers supprimés. */
+    private val forgetting = mutableSetOf<String>()
+
+    /** Toutes les 10 s : un fichier déjà (en partie) téléchargé a-t-il disparu du dossier ? */
+    private fun checkDeletedFiles() {
+        for (h in handles()) {
+            try {
+                val ti = h.torrentFile() ?: continue
+                val id = id(h)
+                if (id in forgetting) continue
+                val state = h.status().state()
+                if (state == TorrentStatus.State.CHECKING_FILES || state == TorrentStatus.State.CHECKING_RESUME_DATA) continue
+                val save = h.savePath()
+                // Stockage absent (pas encore monté…) : ce n'est pas une suppression.
+                if (!File(save).isDirectory) continue
+                val fs = ti.files()
+                val progress = h.fileProgress(TorrentHandle.PIECE_GRANULARITY)
+                val gone = (0 until ti.numFiles()).any { i ->
+                    progress[i] > 0 && !File(save, fs.filePath(i)).exists() && h.filePriority(i) != Priority.IGNORE
+                }
+                if (gone) {
+                    forgetting += id
+                    h.saveResumeData(TorrentHandle.SAVE_INFO_DICT)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Vérification des fichiers impossible", e)
+            }
+        }
+    }
+
+    /** Données de reprise reçues pour un torrent dont des fichiers ont disparu. Renvoie true si c'est réglé. */
+    private fun forgetInSession(a: SaveResumeDataAlert): Boolean {
+        val h = a.handle()
+        val hash = id(h)
+        val p = a.params().swig()
+        return when (forgetDeletedFiles(p)) {
+            Deleted.NONE -> false
+            Deleted.ALL -> {
+                session.remove(h)
+                dropDeleted(p, hash)
+                onChange?.invoke()
+                true
+            }
+            Deleted.SOME -> {
+                // libtorrent ne sait pas oublier des morceaux en cours de route : on remet le torrent avec
+                // ses nouvelles données de reprise (écrites d'abord, au cas où l'appli serait tuée entre-temps).
+                try {
+                    File(resumeDir, "$hash.tmp").apply { writeBytes(AddTorrentParams.writeResumeDataBuf(AddTorrentParams(p))) }
+                        .renameTo(File(resumeDir, "$hash.resume"))
+                } catch (e: Exception) {
+                    Log.w(TAG, "Sauvegarde impossible", e)
+                }
+                session.remove(h)
+                session.swig().async_add_torrent(p)
+                true
+            }
+        }
+    }
+
+    /**
+     * Fichiers supprimés à la main : ils passent en « ignorer » et tous leurs morceaux sont oubliés (libtorrent
+     * remet ce qu'il faut des morceaux partagés avec un fichier gardé dans son fichier .parts, sans recréer
+     * le fichier supprimé). ALL : il ne reste plus rien du torrent sur le disque.
+     */
+    private fun forgetDeletedFiles(p: add_torrent_params): Deleted {
+        val ti = p.ti_ptr() ?: return Deleted.NONE
+        if (!ti.is_valid()) return Deleted.NONE
+        val save = p.save_path
+        if (save.isNullOrEmpty() || !File(save).isDirectory) return Deleted.NONE
+        val fs = TorrentInfo(ti).files().swig()
+        val have = bitfield(p.get_have_pieces())
+        val oldPrios = p.get_file_priorities()
+        val n = fs.num_files()
+        val prios = ByteArray(n) { i -> if (i < oldPrios.size) oldPrios[i] else Priority.DEFAULT.swig() }
+        fun pieces(i: Int) = fs.piece_index_at_file(i)..fs.last_piece_index_at_file(i)
+        fun hasData(i: Int) = fs.file_size(i) > 0 && !fs.pad_file_at(i) &&
+            pieces(i).any { it < have.size() && have.get_bit(it) }
+
+        val gone = (0 until n).filter { i ->
+            prios[i] != Priority.IGNORE.swig() && hasData(i) && !File(save, fs.file_path(i)).exists()
+        }.toSet()
+        if (gone.isEmpty()) return Deleted.NONE
+        if ((0 until n).none { it !in gone && prios[it] != Priority.IGNORE.swig() && hasData(it) }) return Deleted.ALL
+
+        val newPrios = byte_vector()
+        for (i in 0 until n) newPrios.add(if (i in gone) Priority.IGNORE.swig() else prios[i])
+        p.set_file_priorities(newPrios)
+        for (i in gone) for (piece in pieces(i)) if (piece < have.size()) have.clear_bit(piece)
+        p.set_have_pieces(have)
+        return Deleted.SOME
+    }
+
+    /** Torrent dont tous les fichiers ont été supprimés à la main : retiré de la liste. */
+    private fun dropDeleted(p: add_torrent_params, hash: String) {
+        File(resumeDir, "$hash.resume").delete()
+        File(p.save_path, ".$hash.parts").delete()
+        val name = p.ti_ptr()?.name().orEmpty().ifEmpty { "Ce torrent" }
+        onWarning?.invoke("« $name » a été retiré de la liste : ses fichiers ont été supprimés.")
     }
 
     fun saveAll(onlyIfModified: Boolean = false) {

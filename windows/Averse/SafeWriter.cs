@@ -9,8 +9,12 @@ namespace Averse;
 /// dossier de son torrent est refusé : MonoTorrent 3.0.2 laisse passer « ..\ » et les chemins absolus
 /// dans le nom d'un torrent à fichier unique, ce qui permettrait à un torrent piégé d'écrire n'importe où
 /// (dossier Démarrage, etc.).
+/// Un fichier supprimé à la main par l'utilisateur (<paramref name="isGone"/>) n'est plus jamais ouvert :
+/// MonoTorrent le recréerait sinon (ouverture en OpenOrCreate) ou relancerait une vérification complète
+/// qui le retéléchargerait.
 /// </summary>
-public sealed class SafeWriter(IPieceWriter inner, Func<ITorrentManagerFile, bool> isAllowed) : IPieceWriter
+public sealed class SafeWriter(
+    IPieceWriter inner, Func<ITorrentManagerFile, bool> isAllowed, Func<ITorrentManagerFile, bool> isGone) : IPieceWriter
 {
     public int OpenFiles => inner.OpenFiles;
     public int MaximumOpenFiles => inner.MaximumOpenFiles;
@@ -26,28 +30,33 @@ public sealed class SafeWriter(IPieceWriter inner, Func<ITorrentManagerFile, boo
     public ReusableTask SetMaximumOpenFilesAsync(int maximumOpenFiles) => inner.SetMaximumOpenFilesAsync(maximumOpenFiles);
     public void Dispose() => inner.Dispose();
 
+    // Fichier supprimé : on fait comme s'il était toujours là (pas de nouvelle vérification au démarrage),
+    // les lectures ne renvoient rien et les écritures sont ignorées.
+
     public ReusableTask<bool> ExistsAsync(ITorrentManagerFile file)
     {
         Check(file);
-        return inner.ExistsAsync(file);
+        return isGone(file) ? ReusableTask.FromResult(true) : inner.ExistsAsync(file);
     }
 
     public ReusableTask<int> ReadAsync(ITorrentManagerFile file, long offset, Memory<byte> buffer)
     {
         Check(file);
-        return inner.ReadAsync(file, offset, buffer);
+        if (!isGone(file)) return inner.ReadAsync(file, offset, buffer);
+        buffer.Span.Clear();
+        return ReusableTask.FromResult(0);
     }
 
     public ReusableTask WriteAsync(ITorrentManagerFile file, long offset, ReadOnlyMemory<byte> buffer)
     {
         Check(file);
-        return inner.WriteAsync(file, offset, buffer);
+        return isGone(file) ? ReusableTask.CompletedTask : inner.WriteAsync(file, offset, buffer);
     }
 
     public ReusableTask MoveAsync(ITorrentManagerFile file, string fullPath, bool overwrite)
     {
         Check(file);
-        return inner.MoveAsync(file, fullPath, overwrite);
+        return isGone(file) ? ReusableTask.CompletedTask : inner.MoveAsync(file, fullPath, overwrite);
     }
 
     /// <summary>Vrai si <paramref name="path"/> est strictement à l'intérieur de <paramref name="root"/>.</summary>
