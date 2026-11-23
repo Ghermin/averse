@@ -508,8 +508,11 @@ class TorrentEngine(private val context: Context) {
     fun remove(id: String?, deleteFiles: Boolean) {
         val h = find(id)
         val hash = id(h)
+        val save = h.savePath()
         if (deleteFiles) session.remove(h, SessionHandle.DELETE_FILES) else session.remove(h)
         File(resumeDir, "$hash.resume").delete()
+        // Morceaux de fichiers supprimés à la main, gardés par libtorrent dans un fichier caché.
+        File(save, ".$hash.parts").delete()
     }
 
     /** Le fichier téléchargé s'il est unique et terminé, sinon null. */
