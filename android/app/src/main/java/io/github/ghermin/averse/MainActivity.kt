@@ -164,10 +164,24 @@ class MainActivity : Activity() {
         }
     }
 
+    /**
+     * Une autre appli peut nous envoyer n'importe quelle adresse : on refuse de lire nos propres fichiers
+     * (dossier privé de l'appli ou notre FileProvider), qu'elle ne pourrait pas lire elle-même.
+     */
+    private fun isOwnPrivateFile(uri: Uri): Boolean = try {
+        when (uri.scheme?.lowercase()) {
+            "content" -> uri.authority.orEmpty().startsWith(packageName)
+            "file" -> File(uri.path ?: "").canonicalPath.startsWith(File(applicationInfo.dataDir).canonicalPath + File.separator)
+            else -> true
+        }
+    } catch (e: Exception) {
+        true
+    }
+
     /** Un .torrent : choisi dans Averse (replyId ≠ 0, ajouté tout de suite) ou ouvert depuis une autre appli (mis en attente). */
     private fun addFromUri(uri: Uri, replyId: Int) {
         if (replyId != 0) ensurePermissions()
-        val bytes = try {
+        val bytes = if (isOwnPrivateFile(uri)) null else try {
             contentResolver.openInputStream(uri)?.use { it.readBytes() }
         } catch (e: Exception) {
             null
